@@ -1,0 +1,25 @@
+# kelurahans
+1. get_all_kelurahan
+
+# suara_kpus
+1. get_all_suara_kpu
+2. 'suara_kpu_' . $kelurahan->kode_kelurahan
+
+# users
+1. get_all_users
+2. 'user_by_penggerak_' . $loggedInUser->role_id
+3. user_role_1
+4. user_role_2
+
+# aktivitas
+1. get_all_aktivitas
+2. aktivitas_role_1
+3. aktivitas_role_2
+4. aktivitas_role_3
+
+# status_aktivitas_rws
+1. get_all_status_aktivitas_rws
+2. get_all_status_aktivitas_rws_kelurahan
+
+# upcoming_tps
+1. get_all_data_upcoming_tps
