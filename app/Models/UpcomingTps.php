@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\BumpsCacheVersion;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class UpcomingTps extends Model
 {
-    use HasFactory;
+    use HasFactory, BumpsCacheVersion;
 
     protected $guarded = ['id'];
 
@@ -17,6 +18,8 @@ class UpcomingTps extends Model
         'tahun' => 'integer',
         'jumlah_tps' => 'integer',
     ];
+
+    public const CACHE_NAMESPACE = 'upcoming_tps';
 
     /**
      * Get the kelurahans that owns the UpcomingTps

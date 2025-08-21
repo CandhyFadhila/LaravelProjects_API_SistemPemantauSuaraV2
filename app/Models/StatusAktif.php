@@ -2,15 +2,18 @@
 
 namespace App\Models;
 
+use App\Traits\BumpsCacheVersion;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class StatusAktif extends Model
 {
-    use HasFactory;
+    use HasFactory, BumpsCacheVersion;
 
     protected $guarded = ['id'];
+
+    public const CACHE_NAMESPACE = 'users';
 
     /**
      * Get all of the users for the StatusAktif

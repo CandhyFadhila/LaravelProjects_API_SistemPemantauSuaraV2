@@ -317,16 +317,6 @@ class AktivitasController extends Controller
             ], Response::HTTP_BAD_REQUEST);
         }
 
-        // $existingAktivitas = AktivitasPelaksana::where('kelurahan', $kelurahan->id)
-        //     ->where('rw', $validatedData['rw'])
-        //     ->first();
-        // if ($existingAktivitas) {
-        //     return response()->json([
-        //         'status' => Response::HTTP_BAD_REQUEST,
-        //         'message' => "Aktivitas pada RW {$validatedData['rw']} di kelurahan ini sudah ada. Mohon lakukan pembaruan (update) aktivitas."
-        //     ], Response::HTTP_BAD_REQUEST);
-        // }
-
         // Simpan data aktivitas
         $aktivitas = AktivitasPelaksana::create([
             'pelaksana' => $validatedData['pelaksana_id'],
@@ -620,12 +610,9 @@ class AktivitasController extends Controller
 
             try {
                 Excel::import(new AktivitasImport, $file['aktivitas_file']);
-                Cache::forget('public_get_all_aktivitas_' . $this->keyTags);
-                Cache::forget('aktivitas_role_1_' . $this->keyTags);
-                Cache::forget('aktivitas_role_2_' . $this->keyTags);
-                Cache::forget('aktivitas_role_3_' . $this->keyTags);
-                Cache::forget('public_get_all_status_aktivitas_rws_kelurahan_' . $this->keyTags);
-                Cache::forget('public_get_all_data_upcoming_tps_' . $this->keyTags);
+                VersionedCacheHelper::bump(AktivitasPelaksana::CACHE_NAMESPACE, 1);
+                VersionedCacheHelper::bump('status_aktivitas_rw', 1);
+                VersionedCacheHelper::bump('upcoming_tps', 1);
             } catch (\Exception $e) {
                 return response()->json(new WithoutDataResource(Response::HTTP_NOT_ACCEPTABLE, 'Maaf sepertinya terjadi kesalahan.' . $e->getMessage()), Response::HTTP_NOT_ACCEPTABLE);
             }

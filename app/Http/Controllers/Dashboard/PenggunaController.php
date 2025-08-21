@@ -18,10 +18,13 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use App\Exports\Pengguna\PenggunaExport;
 use App\Helpers\Filters\UserFilterHelper;
+use App\Helpers\VersionedCacheHelper;
 use App\Http\Requests\UpdateUserPasswordRequest;
 use App\Http\Resources\public\WithoutDataResource;
 use App\Http\Requests\Pengguna\StorePenggunaRequest;
 use App\Http\Requests\Pengguna\UpdatePenggunaRequest;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 
 class PenggunaController extends Controller
 {
@@ -43,166 +46,193 @@ class PenggunaController extends Controller
 
     public function index(Request $request)
     {
-        if (!Gate::allows('view pengguna')) {
-            return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
-        }
+        try {
+            if (!Gate::allows('view pengguna')) {
+                return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
+            }
 
-        $loggedInUser = $this->loggedInUser;
-        $limit = $request->input('limit', 10);
+            $limit = (int) $request->input('limit', 10);
+            $page  = (int) $request->input('page', 1);
+            $limit = $limit <= 0 ? 10 : $limit;
+            $page  = $page <= 0 ? 1 : $page;
+            $loggedInUser = $this->loggedInUser;
 
-        if ($loggedInUser->role_id == 1) {
-            $query = User::query()->where('id', '!=', 1)->orderBy('created_at', 'desc');
-            $cacheKey = 'user_role_1_' . $this->keyTags;
-        } elseif ($loggedInUser->role_id == 2) {
-            $query = User::query()
-                ->where('role_id', 3)
-                ->where('status_aktif', 2)
-                ->where('pj_pelaksana', $loggedInUser->id)
-                ->orderBy('created_at', 'desc');
-            $cacheKey = 'user_role_2_' . $this->keyTags;
-        } else {
-            return response()->json([
-                'status' => Response::HTTP_FORBIDDEN,
-                'message' => 'Anda tidak memiliki hak akses untuk melakukan proses ini.',
-            ], Response::HTTP_FORBIDDEN);
-        }
+            $q = User::query()
+                ->with([
+                    'roles',
+                    'kelurahans.provinsis',
+                    'kelurahans.kabupaten_kotas',
+                    'kelurahans.kecamatans'
+                ])
+                ->orderByDesc('created_at');
 
-        $filters = $request->all();
-        $query = UserFilterHelper::applyFiltersUser($query, $filters);
+            if ($loggedInUser->role_id == 1) {
+                $q->where('id', '!=', 1);
+            } elseif ($loggedInUser->role_id == 2) {
+                $q->where('role_id', 3)
+                    ->where('status_aktif', 2)
+                    ->where('pj_pelaksana', $loggedInUser->id);
+            } else {
+                return response()->json([
+                    'status' => Response::HTTP_FORBIDDEN,
+                    'message' => 'Anda tidak memiliki hak akses untuk melihat data pengguna ini.',
+                ], Response::HTTP_FORBIDDEN);
+            }
 
-        $users = Cache::rememberForever($cacheKey, function () use ($query) {
-            return $query->get();
-        });
+            $filters = Arr::sortRecursive($request->except(['limit', 'page']));
+            $q = UserFilterHelper::applyFiltersUser($q, $filters);
 
-        if ($limit == 0) {
-            $users = $query->get();
-            $paginationData = null;
-        } else {
-            $limit = is_numeric($limit) ? (int)$limit : 10;
-            $users = $query->paginate($limit);
+            $routeKey = optional($request->route())->getName() ?? $request->path();
+            $parts    = VersionedCacheHelper::standardPagedParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, $filters, $page, $limit);
+
+            $payload = VersionedCacheHelper::remember('users', $parts, function () use ($q, $limit, $page) {
+                $p = $q->paginate($limit, ['*'], 'page', $page); // 1 query + count
+                return [
+                    'items' => $p->items(), // Eloquent models (sudah eager loaded)
+                    'meta'  => [
+                        'current_page' => $p->currentPage(),
+                        'last_page'    => $p->lastPage(),
+                        'per_page'     => $p->perPage(),
+                        'total'        => $p->total(),
+                    ],
+                ];
+            }, now()->addMinutes(10));
+
+            $items = collect($payload['items']);
+            $meta  = $payload['meta'];
+
+            if ($items->isEmpty()) {
+                return response()->json([
+                    'status'     => Response::HTTP_NOT_FOUND,
+                    'message'    => 'Data pengguna tidak ditemukan.',
+                    'data'       => [],
+                    'pagination' => [
+                        'links' => [
+                            'first' => null,
+                            'last' => null,
+                            'prev' => null,
+                            'next' => null,
+                        ],
+                        'meta'  => $meta,
+                    ],
+                ], Response::HTTP_OK);
+            }
+
+            $formattedData = $items->map(function ($user) {
+                $role = $user->roles->first();
+                $kelurahanIds = $user->kelurahan_id ?? null;
+                $kelurahans = null;
+
+                if ($kelurahanIds !== null) {
+                    $kelurahans = Kelurahan::whereIn('id', $kelurahanIds)->get()->map(function ($kelurahan) {
+                        return [
+                            'id' => $kelurahan->id,
+                            'nama_kelurahan' => $kelurahan->nama_kelurahan,
+                            'kode_kelurahan' => $kelurahan->kode_kelurahan,
+                            'max_rw' => $kelurahan->max_rw,
+                            'provinsi' => $kelurahan->provinsis,
+                            'kabupaten' => $kelurahan->kabupaten_kotas,
+                            'kecamatan' => $kelurahan->kecamatans,
+                            'created_at' => $kelurahan->created_at,
+                            'updated_at' => $kelurahan->updated_at
+                        ];
+                    });
+                }
+
+                $pjPelaksana = $user->pj_pelaksana ? User::find($user->pj_pelaksana) : null;
+                $pjPelaksanaData = $pjPelaksana ? [
+                    'id' => $pjPelaksana->id,
+                    'nama' => $pjPelaksana->nama,
+                    'username' => $pjPelaksana->username,
+                    'jenis_kelamin' => $pjPelaksana->jenis_kelamin,
+                    'foto_profil' => $pjPelaksana->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $pjPelaksana->foto_profil : null,
+                    'nik_ktp' => $pjPelaksana->nik_ktp,
+                    'no_hp' => $pjPelaksana->no_hp,
+                    'tgl_diangkat' => $pjPelaksana->tgl_diangkat,
+                    'role' => $pjPelaksana->roles->first() ? [
+                        'id' => $pjPelaksana->roles->first()->id,
+                        'name' => $pjPelaksana->roles->first()->name,
+                        'deskripsi' => $pjPelaksana->roles->first()->deskripsi,
+                        'created_at' => $pjPelaksana->roles->first()->created_at,
+                        'updated_at' => $pjPelaksana->roles->first()->updated_at,
+                    ] : null,
+                    'kelurahan' => $pjPelaksana->kelurahan_id ? Kelurahan::whereIn('id', $pjPelaksana->kelurahan_id)->get()->map(function ($kelurahan) {
+                        return [
+                            'id' => $kelurahan->id,
+                            'nama_kelurahan' => $kelurahan->nama_kelurahan,
+                            'kode_kelurahan' => $kelurahan->kode_kelurahan,
+                            'max_rw' => $kelurahan->max_rw,
+                            'provinsi' => $kelurahan->provinsis,
+                            'kabupaten' => $kelurahan->kabupaten_kotas,
+                            'kecamatan' => $kelurahan->kecamatans,
+                            'created_at' => $kelurahan->created_at,
+                            'updated_at' => $kelurahan->updated_at
+                        ];
+                    }) : null,
+                    'rw_pelaksana' => $pjPelaksana->rw_pelaksana ?? null,
+                    'status_aktif' => $pjPelaksana->status_users ? [
+                        'id' => $pjPelaksana->status_users->id,
+                        'label' => $pjPelaksana->status_users->label,
+                        'created_at' => $pjPelaksana->status_users->created_at,
+                        'updated_at' => $pjPelaksana->status_users->updated_at
+                    ] : null,
+                    'created_at' => $pjPelaksana->created_at,
+                    'updated_at' => $pjPelaksana->updated_at
+                ] : null;
+
+                return [
+                    'id' => $user->id,
+                    'nama' => $user->nama,
+                    'username' => $user->username,
+                    'jenis_kelamin' => $user->jenis_kelamin,
+                    'foto_profil' => $user->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $user->foto_profil : null,
+                    'nik_ktp' => $user->nik_ktp,
+                    'no_hp' => $user->no_hp ?? null,
+                    'tgl_diangkat' => $user->tgl_diangkat,
+                    'role' => $role ? [
+                        'id' => $role->id,
+                        'name' => $role->name,
+                        'deskripsi' => $role->deskripsi,
+                        'created_at' => $role->created_at,
+                        'updated_at' => $role->updated_at,
+                    ] : null,
+                    'kelurahan' => $kelurahans,
+                    'rw_pelaksana' => $user->rw_pelaksana ?? null,
+                    'pj_pelaksana' => $pjPelaksanaData,
+                    'status_aktif' => $user->status_users ? [
+                        'id' => $user->status_users->id,
+                        'label' => $user->status_users->label,
+                        'created_at' => $user->status_users->created_at,
+                        'updated_at' => $user->status_users->updated_at
+                    ] : null,
+                    'created_at' => $user->created_at,
+                    'updated_at' => $user->updated_at
+                ];
+            });
 
             $paginationData = [
                 'links' => [
-                    'first' => $users->url(1),
-                    'last' => $users->url($users->lastPage()),
-                    'prev' => $users->previousPageUrl(),
-                    'next' => $users->nextPageUrl(),
+                    'first' => $request->fullUrlWithQuery(['page' => 1, 'limit' => $meta['per_page']]),
+                    'last'  => $request->fullUrlWithQuery(['page' => $meta['last_page'], 'limit' => $meta['per_page']]),
+                    'prev'  => $meta['current_page'] > 1 ? $request->fullUrlWithQuery(['page' => $meta['current_page'] - 1, 'limit' => $meta['per_page']]) : null,
+                    'next'  => $meta['current_page'] < $meta['last_page'] ? $request->fullUrlWithQuery(['page' => $meta['current_page'] + 1, 'limit' => $meta['per_page']]) : null,
                 ],
-                'meta' => [
-                    'current_page' => $users->currentPage(),
-                    'last_page' => $users->lastPage(),
-                    'per_page' => $users->perPage(),
-                    'total' => $users->total(),
-                ]
+                'meta' => $meta,
             ];
-        }
 
-        if ($users->isEmpty()) {
             return response()->json([
-                'status' => Response::HTTP_NOT_FOUND,
-                'message' => 'Data pengguna tidak ditemukan.',
-                'data' => []
+                'status' => Response::HTTP_OK,
+                'message' => 'Data pengguna berhasil ditampilkan.',
+                'data' => $formattedData,
+                'pagination' => $paginationData
             ], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            Log::channel('pengguna')->error('| Index | - Error function index : ' . $e->getMessage() . ' - Line : ' . $e->getLine());
+            return response()->json([
+                'status' => Response::HTTP_INTERNAL_SERVER_ERROR,
+                'message' => 'Terjadi kesalahan pada sistem, silahkan coba lagi nanti atau hubungi admin.',
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
-
-        $formattedData = $users->map(function ($user) {
-            $role = $user->roles->first();
-            $kelurahanIds = $user->kelurahan_id ?? null;
-            $kelurahans = null;
-
-            if ($kelurahanIds !== null) {
-                $kelurahans = Kelurahan::whereIn('id', $kelurahanIds)->get()->map(function ($kelurahan) {
-                    return [
-                        'id' => $kelurahan->id,
-                        'nama_kelurahan' => $kelurahan->nama_kelurahan,
-                        'kode_kelurahan' => $kelurahan->kode_kelurahan,
-                        'max_rw' => $kelurahan->max_rw,
-                        'provinsi' => $kelurahan->provinsis,
-                        'kabupaten' => $kelurahan->kabupaten_kotas,
-                        'kecamatan' => $kelurahan->kecamatans,
-                        'created_at' => $kelurahan->created_at,
-                        'updated_at' => $kelurahan->updated_at
-                    ];
-                });
-            }
-
-            $pjPelaksana = $user->pj_pelaksana ? User::find($user->pj_pelaksana) : null;
-            $pjPelaksanaData = $pjPelaksana ? [
-                'id' => $pjPelaksana->id,
-                'nama' => $pjPelaksana->nama,
-                'username' => $pjPelaksana->username,
-                'jenis_kelamin' => $pjPelaksana->jenis_kelamin,
-                'foto_profil' => $pjPelaksana->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $pjPelaksana->foto_profil : null,
-                'nik_ktp' => $pjPelaksana->nik_ktp,
-                'no_hp' => $pjPelaksana->no_hp,
-                'tgl_diangkat' => $pjPelaksana->tgl_diangkat,
-                'role' => $pjPelaksana->roles->first() ? [
-                    'id' => $pjPelaksana->roles->first()->id,
-                    'name' => $pjPelaksana->roles->first()->name,
-                    'deskripsi' => $pjPelaksana->roles->first()->deskripsi,
-                    'created_at' => $pjPelaksana->roles->first()->created_at,
-                    'updated_at' => $pjPelaksana->roles->first()->updated_at,
-                ] : null,
-                'kelurahan' => $pjPelaksana->kelurahan_id ? Kelurahan::whereIn('id', $pjPelaksana->kelurahan_id)->get()->map(function ($kelurahan) {
-                    return [
-                        'id' => $kelurahan->id,
-                        'nama_kelurahan' => $kelurahan->nama_kelurahan,
-                        'kode_kelurahan' => $kelurahan->kode_kelurahan,
-                        'max_rw' => $kelurahan->max_rw,
-                        'provinsi' => $kelurahan->provinsis,
-                        'kabupaten' => $kelurahan->kabupaten_kotas,
-                        'kecamatan' => $kelurahan->kecamatans,
-                        'created_at' => $kelurahan->created_at,
-                        'updated_at' => $kelurahan->updated_at
-                    ];
-                }) : null,
-                'rw_pelaksana' => $pjPelaksana->rw_pelaksana ?? null,
-                'status_aktif' => $pjPelaksana->status_users ? [
-                    'id' => $pjPelaksana->status_users->id,
-                    'label' => $pjPelaksana->status_users->label,
-                    'created_at' => $pjPelaksana->status_users->created_at,
-                    'updated_at' => $pjPelaksana->status_users->updated_at
-                ] : null,
-                'created_at' => $pjPelaksana->created_at,
-                'updated_at' => $pjPelaksana->updated_at
-            ] : null;
-
-            return [
-                'id' => $user->id,
-                'nama' => $user->nama,
-                'username' => $user->username,
-                'jenis_kelamin' => $user->jenis_kelamin,
-                'foto_profil' => $user->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $user->foto_profil : null,
-                'nik_ktp' => $user->nik_ktp,
-                'no_hp' => $user->no_hp ?? null,
-                'tgl_diangkat' => $user->tgl_diangkat,
-                'role' => $role ? [
-                    'id' => $role->id,
-                    'name' => $role->name,
-                    'deskripsi' => $role->deskripsi,
-                    'created_at' => $role->created_at,
-                    'updated_at' => $role->updated_at,
-                ] : null,
-                'kelurahan' => $kelurahans,
-                'rw_pelaksana' => $user->rw_pelaksana ?? null,
-                'pj_pelaksana' => $pjPelaksanaData,
-                'status_aktif' => $user->status_users ? [
-                    'id' => $user->status_users->id,
-                    'label' => $user->status_users->label,
-                    'created_at' => $user->status_users->created_at,
-                    'updated_at' => $user->status_users->updated_at
-                ] : null,
-                'created_at' => $user->created_at,
-                'updated_at' => $user->updated_at
-            ];
-        });
-
-        return response()->json([
-            'status' => Response::HTTP_OK,
-            'message' => 'Data pengguna berhasil ditampilkan.',
-            'data' => $formattedData,
-            'pagination' => $paginationData
-        ], Response::HTTP_OK);
     }
 
     public function store(StorePenggunaRequest $request)
@@ -529,11 +559,6 @@ class PenggunaController extends Controller
         }
         $user->save();
 
-        Cache::forget('public_get_all_users_' . $this->keyTags);
-        Cache::forget('user_role_1_' . $this->keyTags);
-        Cache::forget('user_role_2_' . $this->keyTags);
-        Cache::forget('public_user_by_penggerak_' . $this->keyTags);
-
         if ($user->role_id == 2 && $user->status_aktif === 3) {
             $penggerakUsers = User::where('role_id', 3)->where('pj_pelaksana', $user->id)->get();
             foreach ($penggerakUsers as $penggerak) {
@@ -580,11 +605,6 @@ class PenggunaController extends Controller
         $user->password = Hash::make($newPassword);
         $user->save();
 
-        Cache::forget('public_get_all_users_' . $this->keyTags);
-        Cache::forget('user_role_1_' . $this->keyTags);
-        Cache::forget('user_role_2_' . $this->keyTags);
-        Cache::forget('public_user_by_penggerak_' . $this->keyTags);
-
         return response()->json([
             'status' => Response::HTTP_OK,
             'message' => "Berhasil melakukan reset password untuk pengguna '{$user->nama}'.",
@@ -610,10 +630,6 @@ class PenggunaController extends Controller
         }
         /** @var \App\Models\User $user **/
         $user->fill($data)->save();
-        Cache::forget('public_get_all_users_' . $this->keyTags);
-        Cache::forget('user_role_1_' . $this->keyTags);
-        Cache::forget('user_role_2_' . $this->keyTags);
-        Cache::forget('public_user_by_penggerak_' . $this->keyTags);
         return response()->json(new WithoutDataResource(Response::HTTP_OK, 'Berhasil memperbarui kata sandi anda.'), Response::HTTP_OK);
     }
 

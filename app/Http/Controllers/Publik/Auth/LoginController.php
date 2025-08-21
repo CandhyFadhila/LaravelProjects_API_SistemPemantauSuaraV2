@@ -108,6 +108,7 @@ class LoginController extends Controller
             'status' => Response::HTTP_OK,
             'message' => "Login berhasil! Selamat datang '{$user->nama}'.",
             'data' => [
+                'token' => $token,
                 'user' => [
                     'id' => $user->id,
                     'nama' => $user->nama,
@@ -138,7 +139,6 @@ class LoginController extends Controller
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
                 ],
-                'token' => $token,
             ]
         ], Response::HTTP_OK);
     }

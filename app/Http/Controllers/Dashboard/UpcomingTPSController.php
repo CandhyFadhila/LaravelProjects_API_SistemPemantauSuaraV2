@@ -47,8 +47,6 @@ class UpcomingTPSController extends Controller
                 'jumlah_tps' => $validatedData['jumlah_tps'],
             ]);
 
-            Cache::forget('public_get_all_data_upcoming_tps_' . $this->keyTags);
-
             return response()->json([
                 'status' => Response::HTTP_CREATED,
                 'message' => "Data TPS mendatang untuk kelurahan '{$upcomingTPS->kelurahans->nama_kelurahan}' di tahun '{$upcomingTPS->tahun}' berhasil ditambahkan.",
@@ -134,8 +132,6 @@ class UpcomingTPSController extends Controller
             $upcomingTPS->jumlah_tps = $validatedData['jumlah_tps'] ?? $upcomingTPS->jumlah_tps;
             $upcomingTPS->save();
 
-            Cache::forget('public_get_all_data_upcoming_tps_' . $this->keyTags);
-
             return response()->json([
                 'status' => Response::HTTP_OK,
                 'message' => "Data TPS mendatang untuk kelurahan '{$upcomingTPS->kelurahans->nama_kelurahan}' di tahun '{$upcomingTPS->tahun}' berhasil diperbarui.",
@@ -166,8 +162,6 @@ class UpcomingTPSController extends Controller
             }
 
             $upcomingTPS->delete();
-
-            Cache::forget('public_get_all_data_upcoming_tps_' . $this->keyTags);
 
             return response()->json([
                 'status' => Response::HTTP_OK,
