@@ -1016,7 +1016,14 @@ class PublikRequestController extends Controller
                 ->get();
         });
 
-        $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $kategori_suara, $tahun, $routeKey, $loggedInUser) {
+        $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
+            return SuaraKPU::where('kelurahan_id', $kelurahan->id)
+                ->whereIn('tahun', $tahun)
+                ->whereIn('kategori_suara_id', $kategori_suara)
+                ->get();
+        });
+
+        $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $suara_kpu) {
             $maxRw = $kelurahan->max_rw;
             $list_rw = array_fill(0, $maxRw, null);
 
@@ -1027,16 +1034,6 @@ class PublikRequestController extends Controller
             }
             $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
 
-            $parts = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [
-                'kategori_suara' => $kategori_suara,
-                'tahun' => $tahun
-            ], 0);
-            $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
-                return SuaraKPU::where('kelurahan_id', $kelurahan->id)
-                    ->whereIn('tahun', $tahun)
-                    ->whereIn('kategori_suara_id', $kategori_suara)
-                    ->get();
-            });
             $suaraKpuByPartai = $suara_kpu->where('kelurahan_id', $kelurahan->id)->groupBy('partai_id')->map(function ($items) {
                 return [
                     'jumlah_suara' => $items->sum('jumlah_suara'),  // Sum jumlah_suara per partai
