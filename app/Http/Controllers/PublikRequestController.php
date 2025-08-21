@@ -1016,14 +1016,11 @@ class PublikRequestController extends Controller
                     ->get();
             });
 
-            $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
-                $kelurahanIds = $kelurahan->pluck('id');
-
-                return SuaraKPU::whereIn('kelurahan_id', $kelurahanIds)
-                    ->whereIn('tahun', $tahun)
-                    ->whereIn('kategori_suara_id', $kategori_suara)
-                    ->get();
-            });
+            $kelurahanIds = $kelurahan->pluck('id');
+            $suara_kpu = SuaraKPU::whereIn('kelurahan_id', $kelurahanIds)
+                ->whereIn('tahun', $tahun)
+                ->whereIn('kategori_suara_id', $kategori_suara)
+                ->get();
 
             $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $suara_kpu) {
                 $maxRw = $kelurahan->max_rw;
