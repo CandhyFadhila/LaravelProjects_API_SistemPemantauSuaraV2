@@ -1030,9 +1030,7 @@ class PublikRequestController extends Controller
                 $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
 
                 $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
-                    $kelurahanIds = $kelurahan->pluck('id');
-
-                    return SuaraKPU::whereIn('kelurahan_id', $kelurahanIds)
+                    return SuaraKPU::where('kelurahan_id', $kelurahan->id)
                         ->whereIn('tahun', $tahun)
                         ->whereIn('kategori_suara_id', $kategori_suara)
                         ->get();
