@@ -994,6 +994,8 @@ class PublikRequestController extends Controller
             ], 0);
 
             VersionedCacheHelper::bump('suara_kpu', 1);
+            VersionedCacheHelper::bump('kelurahan', 1);
+            VersionedCacheHelper::bump('status_aktivitas_rw', 1);
 
             $kelurahan = VersionedCacheHelper::remember('kelurahan', $parts, function () use ($loggedInUser) {
                 if ($loggedInUser->role_id == 1) {
