@@ -1031,12 +1031,17 @@ class PublikRequestController extends Controller
                 }
                 $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
 
-                $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
-                    return SuaraKPU::where('kelurahan_id', $kelurahan->id)
-                        ->whereIn('tahun', $tahun)
-                        ->whereIn('kategori_suara_id', $kategori_suara)
-                        ->get();
-                });
+                // $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
+                //     return SuaraKPU::where('kelurahan_id', $kelurahan->id)
+                //         ->whereIn('tahun', $tahun)
+                //         ->whereIn('kategori_suara_id', $kategori_suara)
+                //         ->get();
+                // });
+
+                $suara_kpu = SuaraKPU::where('kelurahan_id', $kelurahan->id)
+                    ->whereIn('tahun', $tahun)
+                    ->whereIn('kategori_suara_id', $kategori_suara)
+                    ->get();
 
                 $suaraKpuByPartai = $suara_kpu->where('kelurahan_id', $kelurahan->id)->groupBy('partai_id')->map(function ($items) {
                     return [
