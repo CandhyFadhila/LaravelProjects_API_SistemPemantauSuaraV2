@@ -16,7 +16,6 @@ use Spatie\Permission\Models\Role;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Cache;
 use App\Helpers\StatusAktivitasHelper;
 use App\Helpers\VersionedCacheHelper;
 use App\Http\Resources\public\WithoutDataResource;
@@ -1018,7 +1017,9 @@ class PublikRequestController extends Controller
             });
 
             $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
-                return SuaraKPU::where('kelurahan_id', $kelurahan->id)
+                $kelurahanIds = $kelurahan->pluck('id');
+
+                return SuaraKPU::where('kelurahan_id', $kelurahanIds)
                     ->whereIn('tahun', $tahun)
                     ->whereIn('kategori_suara_id', $kategori_suara)
                     ->get();
