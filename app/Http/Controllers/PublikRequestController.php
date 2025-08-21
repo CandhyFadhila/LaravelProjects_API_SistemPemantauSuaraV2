@@ -1016,7 +1016,7 @@ class PublikRequestController extends Controller
                 ->get();
         });
 
-        $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $kategori_suara, $tahun) {
+        $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $kategori_suara, $tahun, $parts) {
             $maxRw = $kelurahan->max_rw;
             $list_rw = array_fill(0, $maxRw, null);
 
@@ -1027,8 +1027,7 @@ class PublikRequestController extends Controller
             }
             $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
 
-            $cacheKey = 'public_suara_kpu_' . $this->keyTags . '_' . $kelurahan->kode_kelurahan;
-            $suara_kpu = Cache::rememberForever($cacheKey, function () use ($kelurahan, $tahun, $kategori_suara) {
+            $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
                 return SuaraKPU::where('kelurahan_id', $kelurahan->id)
                     ->whereIn('tahun', $tahun)
                     ->whereIn('kategori_suara_id', $kategori_suara)
