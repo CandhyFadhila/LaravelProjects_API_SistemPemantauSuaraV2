@@ -49,7 +49,7 @@ class VersionedCacheHelper
   }
 
   /**
-   * Utility: buat parts standar untuk list (tanpa page).
+   * Utility: buat parts standar untuk list (dengan page).
    * - $filters akan di-sort recursive lalu di-hash agar konsisten.
    */
   public static function standardPagedParts(
@@ -67,6 +67,27 @@ class VersionedCacheHelper
       'role'    => $roleId,
       'filters' => self::hashArray($filters),
       'page'    => $page,
+      'limit'   => $limit,
+    ];
+  }
+
+  /**
+   * Utility: buat parts standar untuk list (tanpa page).
+   * - $filters akan di-sort recursive lalu di-hash agar konsisten.
+   */
+  public static function standardParts(
+    string $routeKey,
+    int $userId = null,
+    int $roleId = null,
+    array $filters = [],
+    int $limit = 10
+  ): array {
+    $filters = Arr::sortRecursive($filters);
+    return [
+      'route'   => $routeKey,
+      'user'    => $userId,
+      'role'    => $roleId,
+      'filters' => self::hashArray($filters),
       'limit'   => $limit,
     ];
   }

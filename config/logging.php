@@ -142,6 +142,14 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
         ],
+
+        // Public Request
+        'public_request' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/Public/public_request.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'replace_placeholders' => true,
+        ],
     ],
 
 ];
