@@ -970,120 +970,128 @@ class PublikRequestController extends Controller
 
     public function getDataMapsKelurahan(Request $request)
     {
-        if (!Gate::allows('view publikRequest')) {
-            return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
-        }
-
-        $loggedInUser = $this->loggedInUser;
-
-        $kategori_suara = $request->input('kategori_suara', []);
-        $tahun = $request->input('tahun', []);
-
-        if (empty($kategori_suara) || empty($tahun)) {
-            return response()->json([
-                'status' => Response::HTTP_BAD_REQUEST,
-                'message' => 'Kategori suara dan tahun diperlukan.',
-                'data' => null
-            ], Response::HTTP_BAD_REQUEST);
-        }
-
-        $routeKey = optional($request->route())->getName() ?? $request->path();
-        $parts = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [
-            'kategori_suara' => $kategori_suara,
-            'tahun' => $tahun
-        ], 0);
-
-        $kelurahan = VersionedCacheHelper::remember('kelurahan', $parts, function () use ($loggedInUser) {
-            if ($loggedInUser->role_id == 1) {
-                return Kelurahan::all();
+        try {
+            if (!Gate::allows('view publikRequest')) {
+                return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
             }
-            if ($loggedInUser->kelurahan_id && !empty($loggedInUser->kelurahan_id)) {
-                return Kelurahan::whereIn('id', $loggedInUser->kelurahan_id)->get();
+
+            $loggedInUser = $this->loggedInUser;
+
+            $kategori_suara = $request->input('kategori_suara', []);
+            $tahun = $request->input('tahun', []);
+
+            if (empty($kategori_suara) || empty($tahun)) {
+                return response()->json([
+                    'status' => Response::HTTP_BAD_REQUEST,
+                    'message' => 'Kategori suara dan tahun diperlukan.',
+                    'data' => null
+                ], Response::HTTP_BAD_REQUEST);
             }
-        });
 
-        if ($kelurahan->isEmpty()) {
-            return response()->json([
-                'status' => Response::HTTP_NOT_FOUND,
-                'message' => 'Data kelurahan tidak ditemukan.',
-                'data' => []
-            ], Response::HTTP_OK);
-        }
+            $routeKey = optional($request->route())->getName() ?? $request->path();
+            $parts = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [
+                'kategori_suara' => $kategori_suara,
+                'tahun' => $tahun
+            ], 0);
 
-        $statusAktivitasRw = VersionedCacheHelper::remember('status_aktivitas_rw', $parts, function () use ($kelurahan) {
-            return StatusAktivitasRw::whereIn('kelurahan_id', $kelurahan->pluck('id'))
-                ->with('aktivitas_status')
-                ->get();
-        });
-
-        $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
-            return SuaraKPU::where('kelurahan_id', $kelurahan->id)
-                ->whereIn('tahun', $tahun)
-                ->whereIn('kategori_suara_id', $kategori_suara)
-                ->get();
-        });
-
-        $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $suara_kpu) {
-            $maxRw = $kelurahan->max_rw;
-            $list_rw = array_fill(0, $maxRw, null);
-
-            foreach ($statusAktivitasRw as $status) {
-                if ($status->kelurahan_id == $kelurahan->id && $status->rw <= $maxRw) {
-                    $list_rw[$status->rw - 1] = $status->status_aktivitas;
+            $kelurahan = VersionedCacheHelper::remember('kelurahan', $parts, function () use ($loggedInUser) {
+                if ($loggedInUser->role_id == 1) {
+                    return Kelurahan::all();
                 }
-            }
-            $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
+                if ($loggedInUser->kelurahan_id && !empty($loggedInUser->kelurahan_id)) {
+                    return Kelurahan::whereIn('id', $loggedInUser->kelurahan_id)->get();
+                }
+            });
 
-            $suaraKpuByPartai = $suara_kpu->where('kelurahan_id', $kelurahan->id)->groupBy('partai_id')->map(function ($items) {
+            if ($kelurahan->isEmpty()) {
+                return response()->json([
+                    'status' => Response::HTTP_NOT_FOUND,
+                    'message' => 'Data kelurahan tidak ditemukan.',
+                    'data' => []
+                ], Response::HTTP_OK);
+            }
+
+            $statusAktivitasRw = VersionedCacheHelper::remember('status_aktivitas_rw', $parts, function () use ($kelurahan) {
+                return StatusAktivitasRw::whereIn('kelurahan_id', $kelurahan->pluck('id'))
+                    ->with('aktivitas_status')
+                    ->get();
+            });
+
+            $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
+                return SuaraKPU::where('kelurahan_id', $kelurahan->id)
+                    ->whereIn('tahun', $tahun)
+                    ->whereIn('kategori_suara_id', $kategori_suara)
+                    ->get();
+            });
+
+            $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $suara_kpu) {
+                $maxRw = $kelurahan->max_rw;
+                $list_rw = array_fill(0, $maxRw, null);
+
+                foreach ($statusAktivitasRw as $status) {
+                    if ($status->kelurahan_id == $kelurahan->id && $status->rw <= $maxRw) {
+                        $list_rw[$status->rw - 1] = $status->status_aktivitas;
+                    }
+                }
+                $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
+
+                $suaraKpuByPartai = $suara_kpu->where('kelurahan_id', $kelurahan->id)->groupBy('partai_id')->map(function ($items) {
+                    return [
+                        'jumlah_suara' => $items->sum('jumlah_suara'),  // Sum jumlah_suara per partai
+                        'partai_id' => $items->first()->partai_id       // Ambil partai_id dari grup
+                    ];
+                });
+                // dd($suaraKpuByPartai);
+
+                // Urutkan partai berdasarkan jumlah suara terbanyak
+                $partaiWithMaxSuara = $suaraKpuByPartai->sortByDesc('jumlah_suara')->first();
+                // dd($partaiWithMaxSuara);
+
+                $suara_kpu_terbanyak = null;
+                if ($partaiWithMaxSuara) {
+                    // Ambil nama partai dari data suara kpu pertama yang sesuai dengan partai_id terbanyak
+                    $partai = $suara_kpu->firstWhere('partai_id', $partaiWithMaxSuara['partai_id'])->partais ?? null;
+                    if ($partai) {
+                        $suara_kpu_terbanyak = [
+                            'partai' => [
+                                'id' => $partai->id,
+                                'nama' => $partai->nama,
+                                'color' => $partai->color,
+                                'created_at' => $partai->created_at,
+                                'updated_at' => $partai->updated_at
+                            ],
+                            'jumlah_suara' => $partaiWithMaxSuara['jumlah_suara']
+                        ];
+                    }
+                }
+
                 return [
-                    'jumlah_suara' => $items->sum('jumlah_suara'),  // Sum jumlah_suara per partai
-                    'partai_id' => $items->first()->partai_id       // Ambil partai_id dari grup
+                    'id' => $kelurahan->id,
+                    'nama_kelurahan' => $kelurahan->nama_kelurahan,
+                    'kode_kelurahan' => $kelurahan->kode_kelurahan,
+                    'max_rw' => $kelurahan->max_rw,
+                    'kecamatan' => $kelurahan->kecamatans,
+                    'kabupaten' => $kelurahan->kabupaten_kotas,
+                    'provinsi' => $kelurahan->provinsis,
+                    // 'list_rw' => $list_rw, // buat debug
+                    'status_aktivitas_kelurahan' => $status_aktivitas_kelurahan,
+                    'suara_kpu_terbanyak' => $suara_kpu_terbanyak,
+                    'created_at' => $kelurahan->created_at,
+                    'updated_at' => $kelurahan->updated_at
                 ];
             });
-            // dd($suaraKpuByPartai);
 
-            // Urutkan partai berdasarkan jumlah suara terbanyak
-            $partaiWithMaxSuara = $suaraKpuByPartai->sortByDesc('jumlah_suara')->first();
-            // dd($partaiWithMaxSuara);
-
-            $suara_kpu_terbanyak = null;
-            if ($partaiWithMaxSuara) {
-                // Ambil nama partai dari data suara kpu pertama yang sesuai dengan partai_id terbanyak
-                $partai = $suara_kpu->firstWhere('partai_id', $partaiWithMaxSuara['partai_id'])->partais ?? null;
-                if ($partai) {
-                    $suara_kpu_terbanyak = [
-                        'partai' => [
-                            'id' => $partai->id,
-                            'nama' => $partai->nama,
-                            'color' => $partai->color,
-                            'created_at' => $partai->created_at,
-                            'updated_at' => $partai->updated_at
-                        ],
-                        'jumlah_suara' => $partaiWithMaxSuara['jumlah_suara']
-                    ];
-                }
-            }
-
-            return [
-                'id' => $kelurahan->id,
-                'nama_kelurahan' => $kelurahan->nama_kelurahan,
-                'kode_kelurahan' => $kelurahan->kode_kelurahan,
-                'max_rw' => $kelurahan->max_rw,
-                'kecamatan' => $kelurahan->kecamatans,
-                'kabupaten' => $kelurahan->kabupaten_kotas,
-                'provinsi' => $kelurahan->provinsis,
-                // 'list_rw' => $list_rw, // buat debug
-                'status_aktivitas_kelurahan' => $status_aktivitas_kelurahan,
-                'suara_kpu_terbanyak' => $suara_kpu_terbanyak,
-                'created_at' => $kelurahan->created_at,
-                'updated_at' => $kelurahan->updated_at
-            ];
-        });
-
-        return response()->json([
-            'status' => Response::HTTP_OK,
-            'message' => 'Retrieving all kelurahans with kpus',
-            'data' => $formattedData
-        ]);
+            return response()->json([
+                'status' => Response::HTTP_OK,
+                'message' => 'Retrieving all kelurahans with kpus',
+                'data' => $formattedData
+            ]);
+        } catch (\Exception $e) {
+            Log::channel('public_request')->error('| Public Request | - Error function getAllDataKelurahan : ' . $e->getMessage() . ' - Line : ' . $e->getLine());
+            return response()->json([
+                'status' => Response::HTTP_INTERNAL_SERVER_ERROR,
+                'message' => 'Terjadi kesalahan pada sistem, silahkan coba lagi nanti atau hubungi admin.',
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 }
