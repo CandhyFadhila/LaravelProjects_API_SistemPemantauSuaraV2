@@ -20,7 +20,7 @@ class AktivitasPelaksana extends Model
         'rw' => 'integer',
         'status_aktivitas_rw' => 'integer',
     ];
-    protected static string $cacheNamespace = 'aktivitas';
+    public const CACHE_NAMESPACE = 'aktivitas';
 
     /**
      * Get the pelaksana_users that owns the AktivitasPelaksana

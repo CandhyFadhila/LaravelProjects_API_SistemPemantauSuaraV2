@@ -20,7 +20,7 @@ class StatusAktivitasRw extends Model
         'status_aktivitas' => 'integer',
     ];
 
-    protected static string $cacheNamespace = 'aktivitas';
+    public const CACHE_NAMESPACE = 'aktivitas';
 
     /**
      * Get the kelurahans that owns the StatusAktivitasRw

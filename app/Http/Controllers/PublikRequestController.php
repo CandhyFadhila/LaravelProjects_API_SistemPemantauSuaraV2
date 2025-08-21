@@ -254,25 +254,42 @@ class PublikRequestController extends Controller
     }
 
     // Cache
-    public function getAllStatusAktivitasRW()
+    public function getAllStatusAktivitasRW(Request $request)
     {
         try {
             if (!Gate::allows('view publikRequest')) {
                 return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
             }
 
-            $status_rw = Cache::rememberForever('public_get_all_status_aktivitas_rws_' . $this->keyTags, function () {
-                return StatusAktivitasRw::orderBy('created_at', 'desc')->get();
-            });
-            if ($status_rw->isEmpty()) {
+            $q = StatusAktivitasRw::query()
+                ->with([
+                    'kelurahans.provinsis',
+                    'kelurahans.kabupaten_kotas',
+                    'kelurahans.kecamatans',
+                    'aktivitas_status',
+                ])
+                ->orderByDesc('created_at');
+
+            $filters = [];
+
+            $loggedInUser     = $this->loggedInUser;
+            $routeKey = optional($request->route())->getName() ?? $request->path();
+            $parts    = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, $filters, 0);
+
+            // Ambil dari cache SETELAH query siap
+            $rows = VersionedCacheHelper::remember('aktivitas', $parts, function () use ($q) {
+                return $q->get();
+            }, now()->addMinutes(10));
+
+            if ($rows->isEmpty()) {
                 return response()->json([
-                    'status' => Response::HTTP_NOT_FOUND,
+                    'status'  => Response::HTTP_NOT_FOUND,
                     'message' => 'Data status aktivitas rw tidak ditemukan.',
-                    'data' => []
+                    'data'    => []
                 ], Response::HTTP_OK);
             }
 
-            $formattedData = $status_rw->map(function ($status_rw) {
+            $formattedData = $rows->map(function ($status_rw) {
                 return [
                     'id' => $status_rw->id,
                     'kelurahan' => $status_rw->kelurahans ? [
@@ -300,7 +317,7 @@ class PublikRequestController extends Controller
 
             return response()->json([
                 'status' => Response::HTTP_OK,
-                'message' => 'Retrieving all suara kpu',
+                'message' => 'Berhasil mengambil data status aktivitas rw.',
                 'data' => $formattedData
             ]);
         } catch (\Exception $e) {
@@ -312,7 +329,7 @@ class PublikRequestController extends Controller
         }
     }
 
-    public function getAllDataUser()
+    public function getAllDataUser(Request $request)
     {
         if (!Gate::allows('view publikRequest')) {
             return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
@@ -451,7 +468,7 @@ class PublikRequestController extends Controller
         ], Response::HTTP_OK);
     }
 
-    public function getAllUserbyPenggerak()
+    public function getAllUserbyPenggerak(Request $request)
     {
         $loggedInUser = $this->loggedInUser;
         if (!in_array($loggedInUser->role_id, [1, 2])) {
@@ -590,7 +607,7 @@ class PublikRequestController extends Controller
         ], Response::HTTP_OK);
     }
 
-    public function getAllDataKelurahan()
+    public function getAllDataKelurahan(Request $request)
     {
         if (!Gate::allows('view publikRequest')) {
             return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
@@ -761,7 +778,7 @@ class PublikRequestController extends Controller
         }
     }
 
-    public function getAllDataSuaraKPU()
+    public function getAllDataSuaraKPU(Request $request)
     {
         if (!Gate::allows('view publikRequest')) {
             return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
@@ -819,7 +836,7 @@ class PublikRequestController extends Controller
         ]);
     }
 
-    public function getAllDataUpcomingTPS()
+    public function getAllDataUpcomingTPS(Request $request)
     {
         if (!Gate::allows('view upcomingTPS')) {
             return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
