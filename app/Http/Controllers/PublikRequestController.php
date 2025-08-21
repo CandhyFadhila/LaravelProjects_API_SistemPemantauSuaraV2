@@ -1016,11 +1016,18 @@ class PublikRequestController extends Controller
                     ->get();
             });
 
-            $kelurahanIds = $kelurahan->pluck('id');
-            $suara_kpu = SuaraKPU::whereIn('kelurahan_id', $kelurahanIds)
-                ->whereIn('tahun', $tahun)
-                ->whereIn('kategori_suara_id', $kategori_suara)
-                ->get();
+            $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
+                $kelurahanIds = $kelurahan->pluck('id');
+                $query = SuaraKPU::whereIn('kelurahan_id', $kelurahanIds)
+                    ->whereIn('tahun', $tahun)
+                    ->whereIn('kategori_suara_id', $kategori_suara);
+
+                $result = $query->get();
+                Log::info('Fetched Suara KPU from DB: ' . $result->count() . ' items');
+                return $result;
+            });
+
+            Log::info('Suara KPU data in cache: ' . $suara_kpu->count());
 
             $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $suara_kpu) {
                 $maxRw = $kelurahan->max_rw;
