@@ -60,9 +60,8 @@ class PenggunaController extends Controller
             $q = User::query()
                 ->with([
                     'roles',
-                    'kelurahans.provinsis',
-                    'kelurahans.kabupaten_kotas',
-                    'kelurahans.kecamatans'
+                    'aktivitas_users',
+                    'status_users'
                 ])
                 ->orderByDesc('created_at');
 
