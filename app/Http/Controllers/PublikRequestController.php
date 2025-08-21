@@ -987,25 +987,16 @@ class PublikRequestController extends Controller
                 ], Response::HTTP_BAD_REQUEST);
             }
 
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [
-                'kategori_suara' => $kategori_suara,
-                'tahun' => $tahun
-            ], 0);
-
             VersionedCacheHelper::bump('suara_kpu', 1);
             VersionedCacheHelper::bump('kelurahan', 1);
             VersionedCacheHelper::bump('status_aktivitas_rw', 1);
 
-            $kelurahan = VersionedCacheHelper::remember('kelurahan', $parts, function () use ($loggedInUser) {
-                if ($loggedInUser->role_id == 1) {
-                    return Kelurahan::all();
-                }
-                if ($loggedInUser->kelurahan_id && !empty($loggedInUser->kelurahan_id)) {
-                    return Kelurahan::whereIn('id', $loggedInUser->kelurahan_id)->get();
-                }
-            });
-
+            if ($loggedInUser->role_id == 1) {
+                $kelurahan = Kelurahan::all();
+            }
+            if ($loggedInUser->kelurahan_id && !empty($loggedInUser->kelurahan_id)) {
+                $kelurahan = Kelurahan::whereIn('id', $loggedInUser->kelurahan_id)->get();
+            }
             if ($kelurahan->isEmpty()) {
                 return response()->json([
                     'status' => Response::HTTP_NOT_FOUND,
@@ -1014,13 +1005,11 @@ class PublikRequestController extends Controller
                 ], Response::HTTP_OK);
             }
 
-            $statusAktivitasRw = VersionedCacheHelper::remember('status_aktivitas_rw', $parts, function () use ($kelurahan) {
-                return StatusAktivitasRw::whereIn('kelurahan_id', $kelurahan->pluck('id'))
-                    ->with('aktivitas_status')
-                    ->get();
-            });
+            $statusAktivitasRw = StatusAktivitasRw::whereIn('kelurahan_id', $kelurahan->pluck('id'))
+                ->with('aktivitas_status')
+                ->get();
 
-            $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $tahun, $kategori_suara, $parts) {
+            $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $tahun, $kategori_suara) {
                 $maxRw = $kelurahan->max_rw;
                 $list_rw = array_fill(0, $maxRw, null);
 
@@ -1030,13 +1019,6 @@ class PublikRequestController extends Controller
                     }
                 }
                 $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
-
-                // $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
-                //     return SuaraKPU::where('kelurahan_id', $kelurahan->id)
-                //         ->whereIn('tahun', $tahun)
-                //         ->whereIn('kategori_suara_id', $kategori_suara)
-                //         ->get();
-                // });
 
                 $suara_kpu = SuaraKPU::where('kelurahan_id', $kelurahan->id)
                     ->whereIn('tahun', $tahun)
