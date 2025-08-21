@@ -1019,7 +1019,7 @@ class PublikRequestController extends Controller
             $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
                 $kelurahanIds = $kelurahan->pluck('id');
 
-                return SuaraKPU::where('kelurahan_id', $kelurahanIds)
+                return SuaraKPU::whereIn('kelurahan_id', $kelurahanIds)
                     ->whereIn('tahun', $tahun)
                     ->whereIn('kategori_suara_id', $kategori_suara)
                     ->get();
