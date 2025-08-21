@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\BumpsCacheVersion;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class AktivitasPelaksana extends Model
 {
-    use HasFactory;
+    use HasFactory, BumpsCacheVersion;
 
     protected $guarded = ['id'];
     protected $casts = [
@@ -19,6 +20,7 @@ class AktivitasPelaksana extends Model
         'rw' => 'integer',
         'status_aktivitas_rw' => 'integer',
     ];
+    protected static string $cacheNamespace = 'aktivitas';
 
     /**
      * Get the pelaksana_users that owns the AktivitasPelaksana

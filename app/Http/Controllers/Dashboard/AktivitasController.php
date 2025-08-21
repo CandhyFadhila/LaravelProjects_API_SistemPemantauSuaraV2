@@ -19,10 +19,13 @@ use Illuminate\Support\Facades\Cache;
 use App\Exports\Aktivitas\AktivitasExport;
 use App\Imports\Aktivitas\AktivitasImport;
 use App\Helpers\Filters\AktivitasFilterHelper;
+use App\Helpers\VersionedCacheHelper;
 use App\Http\Resources\public\WithoutDataResource;
 use App\Http\Requests\Aktivitas\ImportAktivitasRequest;
 use App\Http\Requests\Aktivitas\StoreAktivitasPelaksanaRequest;
 use App\Http\Requests\Aktivitas\UpdateAktivitasPelaksanaRequest;
+use Illuminate\Support\Arr;
+use PhpParser\Node\Stmt\TryCatch;
 
 class AktivitasController extends Controller
 {
@@ -44,213 +47,252 @@ class AktivitasController extends Controller
 
     public function index(Request $request)
     {
-        if (!Gate::allows('view aktivitas')) {
-            return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
-        }
-
-        $limit = $request->input('limit', 10);
-        $loggedInUser = $this->loggedInUser;
-
-        if ($loggedInUser->role_id == 1) {
-            $aktivitas_pelaksana = AktivitasPelaksana::query()->orderBy('created_at', 'desc');
-            $cacheKey = 'aktivitas_role_1_' . $this->keyTags;
-        } elseif ($loggedInUser->role_id == 2) {
-            $aktivitas_pelaksana = AktivitasPelaksana::where(function ($query) use ($loggedInUser) {
-                $query->whereHas('pelaksana_users', function ($subQuery) use ($loggedInUser) {
-                    $subQuery->where('role_id', 3)->where('pj_pelaksana', $loggedInUser->id);
-                })->orWhere('pelaksana', $loggedInUser->id);
-            })->orderBy('created_at', 'desc');
-            $cacheKey = 'aktivitas_role_2_' . $this->keyTags;
-        } elseif ($loggedInUser->role_id == 3) {
-            $aktivitas_pelaksana = AktivitasPelaksana::where('pelaksana', $loggedInUser->id)->orderBy('created_at', 'desc');
-            $cacheKey = 'aktivitas_role_3_' . $this->keyTags;
-        } else {
-            return response()->json([
-                'status' => Response::HTTP_FORBIDDEN,
-                'message' => 'Anda tidak memiliki hak akses untuk melihat aktivitas ini.'
-            ], Response::HTTP_FORBIDDEN);
-        }
-
-        $filters = $request->all();
-        $aktivitas = AktivitasFilterHelper::applyFiltersAktivitas($aktivitas_pelaksana, $filters);
-
-        $data_aktivitas = Cache::rememberForever($cacheKey, function () use ($aktivitas_pelaksana) {
-            return $aktivitas_pelaksana->get();
-        });
-
-        if ($limit == 0) {
-            $data_aktivitas = $aktivitas->get();
-            $paginationData = null;
-        } else {
-            $limit = is_numeric($limit) ? (int)$limit : 10;
-            $data_aktivitas = $aktivitas->paginate($limit);
-
-            $paginationData = [
-                'links' => [
-                    'first' => $data_aktivitas->url(1),
-                    'last' => $data_aktivitas->url($data_aktivitas->lastPage()),
-                    'prev' => $data_aktivitas->previousPageUrl(),
-                    'next' => $data_aktivitas->nextPageUrl(),
-                ],
-                'meta' => [
-                    'current_page' => $data_aktivitas->currentPage(),
-                    'last_page' => $data_aktivitas->lastPage(),
-                    'per_page' => $data_aktivitas->perPage(),
-                    'total' => $data_aktivitas->total(),
-                ]
-            ];
-        }
-        if ($data_aktivitas->isEmpty()) {
-            return response()->json([
-                'status' => Response::HTTP_NOT_FOUND,
-                'message' => 'Data aktivitas tidak ditemukan.',
-                'data' => []
-            ], Response::HTTP_OK);
-        }
-
-        $formattedData = $data_aktivitas->map(function ($aktivitas) {
-            $role = $aktivitas->pelaksana_users->roles->first();
-            $pelaksana = $aktivitas->pelaksana_users;
-            $kelurahanIds = $pelaksana ? $pelaksana->kelurahan_id ?? null : null;
-            $kelurahanData = null;
-
-            if (!empty($kelurahanIds)) {
-                $kelurahanData = Kelurahan::whereIn('id', $kelurahanIds)->get()->map(function ($kelurahan) {
-                    return [
-                        'id' => $kelurahan->id,
-                        'nama_kelurahan' => $kelurahan->nama_kelurahan,
-                        'kode_kelurahan' => $kelurahan->kode_kelurahan,
-                        'max_rw' => $kelurahan->max_rw,
-                        'provinsi' => $kelurahan->provinsis,
-                        'kabupaten' => $kelurahan->kabupaten_kotas,
-                        'kecamatan' => $kelurahan->kecamatans,
-                        'created_at' => $kelurahan->created_at,
-                        'updated_at' => $kelurahan->updated_at
-                    ];
-                });
+        try {
+            if (!Gate::allows('view aktivitas')) {
+                return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
             }
 
-            $pjPelaksana = $pelaksana && $pelaksana->pj_pelaksana ? User::find($pelaksana->pj_pelaksana) : null;
-            $pjPelaksanaData = $pjPelaksana ? [
-                'id' => $pjPelaksana->id,
-                'nama' => $pjPelaksana->nama,
-                'username' => $pjPelaksana->username,
-                'jenis_kelamin' => $pjPelaksana->jenis_kelamin,
-                'foto_profil' => $pjPelaksana->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $pjPelaksana->foto_profil : null,
-                'nik_ktp' => $pjPelaksana->nik_ktp,
-                'no_hp' => $pjPelaksana->no_hp,
-                'tgl_diangkat' => $pjPelaksana->tgl_diangkat,
-                'role' => $pjPelaksana->roles->first() ? [
-                    'id' => $pjPelaksana->roles->first()->id,
-                    'name' => $pjPelaksana->roles->first()->name,
-                    'deskripsi' => $pjPelaksana->roles->first()->deskripsi,
-                    'created_at' => $pjPelaksana->roles->first()->created_at,
-                    'updated_at' => $pjPelaksana->roles->first()->updated_at,
-                ] : null,
-                'kelurahan' => $pjPelaksana->kelurahan_id ? Kelurahan::whereIn('id', $pjPelaksana->kelurahan_id)->get()->map(function ($kelurahan) {
-                    return [
-                        'id' => $kelurahan->id,
-                        'nama_kelurahan' => $kelurahan->nama_kelurahan,
-                        'kode_kelurahan' => $kelurahan->kode_kelurahan,
-                        'max_rw' => $kelurahan->max_rw,
-                        'provinsi' => $kelurahan->provinsis,
-                        'kabupaten' => $kelurahan->kabupaten_kotas,
-                        'kecamatan' => $kelurahan->kecamatans,
-                        'created_at' => $kelurahan->created_at,
-                        'updated_at' => $kelurahan->updated_at
-                    ];
-                }) : null,
-                'rw_pelaksana' => $pjPelaksana->rw_pelaksana ?? null,
-                'status_aktif' => $pjPelaksana->status_users ? [
-                    'id' => $pjPelaksana->status_users->id,
-                    'label' => $pjPelaksana->status_users->label,
-                    'created_at' => $pjPelaksana->status_users->created_at,
-                    'updated_at' => $pjPelaksana->status_users->updated_at
-                ] : null,
-                'created_at' => $pjPelaksana->created_at,
-                'updated_at' => $pjPelaksana->updated_at
-            ] : null;
+            $limit = (int) $request->input('limit', 10);
+            $page  = (int) $request->input('page', 1);
+            $limit = $limit <= 0 ? 10 : $limit;
+            $page  = $page <= 0 ? 1 : $page;
+            $loggedInUser = $this->loggedInUser;
 
-            return [
-                'id' => $aktivitas->id,
-                'pelaksana' => $aktivitas->pelaksana_users ? [
-                    'id' => $aktivitas->pelaksana_users->id,
-                    'nama' => $aktivitas->pelaksana_users->nama,
-                    'username' => $aktivitas->pelaksana_users->username,
-                    'nik_ktp' => $aktivitas->pelaksana_users->nik_ktp,
-                    'foto_profil' =>  $aktivitas->pelaksana_users->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $aktivitas->pelaksana_users->foto_profil : null,
-                    'tgl_diangkat' => $aktivitas->pelaksana_users->tgl_diangkat,
-                    'jenis_kelamin' => $aktivitas->pelaksana_users->jenis_kelamin,
-                    'role' => $role ? [
-                        'id' => $role->id,
-                        'name' => $role->name,
-                        'deskripsi' => $role->deskripsi,
-                        'created_at' => $role->created_at,
-                        'updated_at' => $role->updated_at,
+            // Base query + eager load (hindari N+1)
+            $q = AktivitasPelaksana::query()
+                ->with([
+                    'pelaksana_users.roles',
+                    'kelurahans.provinsis',
+                    'kelurahans.kabupaten_kotas',
+                    'kelurahans.kecamatans',
+                    'status',
+                    'aktivitas_rws.kelurahans.provinsis',
+                    'aktivitas_rws.kelurahans.kabupaten_kotas',
+                    'aktivitas_rws.kelurahans.kecamatans',
+                ])
+                ->orderByDesc('created_at');
+
+            // Filter by role
+            if ($loggedInUser->role_id == 1) {
+                // all
+            } elseif ($loggedInUser->role_id == 2) {
+                $q->where(function ($query) use ($loggedInUser) {
+                    $query->whereHas('pelaksana_users', function ($subQuery) use ($loggedInUser) {
+                        $subQuery->where('role_id', 3)->where('pj_pelaksana', $loggedInUser->id);
+                    })->orWhere('pelaksana', $loggedInUser->id);
+                });
+            } elseif ($loggedInUser->role_id == 3) {
+                $q->where('pelaksana', $loggedInUser->id);
+            } else {
+                return response()->json([
+                    'status'  => Response::HTTP_FORBIDDEN,
+                    'message' => 'Anda tidak memiliki hak akses untuk melihat aktivitas ini.'
+                ], Response::HTTP_FORBIDDEN);
+            }
+
+            // Terapkan filter helper (semua kecuali param paging)
+            $filters = Arr::sortRecursive($request->except(['limit', 'page']));
+            $q = AktivitasFilterHelper::applyFiltersAktivitas($q, $filters);
+
+            // Bangun parts unik (ikut page & limit)
+            $routeKey = optional($request->route())->getName() ?? $request->path();
+            $parts    = VersionedCacheHelper::standardPagedParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, $filters, $page, $limit);
+
+            // Cache payload paginate per page (items + meta saja)
+            $payload = VersionedCacheHelper::remember('aktivitas', $parts, function () use ($q, $limit, $page) {
+                $p = $q->paginate($limit, ['*'], 'page', $page); // 1 query + count
+                return [
+                    'items' => $p->items(), // Eloquent models (sudah eager loaded)
+                    'meta'  => [
+                        'current_page' => $p->currentPage(),
+                        'last_page'    => $p->lastPage(),
+                        'per_page'     => $p->perPage(),
+                        'total'        => $p->total(),
+                    ],
+                ];
+            }, now()->addMinutes(10));
+
+            $items = collect($payload['items']);
+            $meta  = $payload['meta'];
+
+            if ($items->isEmpty()) {
+                return response()->json([
+                    'status'     => Response::HTTP_NOT_FOUND,
+                    'message'    => 'Data aktivitas tidak ditemukan.',
+                    'data'       => [],
+                    'pagination' => [
+                        'links' => [
+                            'first' => null,
+                            'last' => null,
+                            'prev' => null,
+                            'next' => null,
+                        ],
+                        'meta'  => $meta,
+                    ],
+                ], Response::HTTP_OK);
+            }
+
+            $formattedData = $items->map(function ($aktivitas) {
+                $role = $aktivitas->pelaksana_users->roles->first();
+                $pelaksana = $aktivitas->pelaksana_users;
+                $kelurahanIds = $pelaksana ? $pelaksana->kelurahan_id ?? null : null;
+                $kelurahanData = null;
+
+                if (!empty($kelurahanIds)) {
+                    $kelurahanData = Kelurahan::whereIn('id', $kelurahanIds)->get()->map(function ($kelurahan) {
+                        return [
+                            'id' => $kelurahan->id,
+                            'nama_kelurahan' => $kelurahan->nama_kelurahan,
+                            'kode_kelurahan' => $kelurahan->kode_kelurahan,
+                            'max_rw' => $kelurahan->max_rw,
+                            'provinsi' => $kelurahan->provinsis,
+                            'kabupaten' => $kelurahan->kabupaten_kotas,
+                            'kecamatan' => $kelurahan->kecamatans,
+                            'created_at' => $kelurahan->created_at,
+                            'updated_at' => $kelurahan->updated_at
+                        ];
+                    });
+                }
+
+                $pjPelaksana = $pelaksana && $pelaksana->pj_pelaksana ? User::find($pelaksana->pj_pelaksana) : null;
+                $pjPelaksanaData = $pjPelaksana ? [
+                    'id' => $pjPelaksana->id,
+                    'nama' => $pjPelaksana->nama,
+                    'username' => $pjPelaksana->username,
+                    'jenis_kelamin' => $pjPelaksana->jenis_kelamin,
+                    'foto_profil' => $pjPelaksana->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $pjPelaksana->foto_profil : null,
+                    'nik_ktp' => $pjPelaksana->nik_ktp,
+                    'no_hp' => $pjPelaksana->no_hp,
+                    'tgl_diangkat' => $pjPelaksana->tgl_diangkat,
+                    'role' => $pjPelaksana->roles->first() ? [
+                        'id' => $pjPelaksana->roles->first()->id,
+                        'name' => $pjPelaksana->roles->first()->name,
+                        'deskripsi' => $pjPelaksana->roles->first()->deskripsi,
+                        'created_at' => $pjPelaksana->roles->first()->created_at,
+                        'updated_at' => $pjPelaksana->roles->first()->updated_at,
                     ] : null,
-                    'status_aktif' => $pelaksana->status_aktif,
-                    'kelurahan' => $kelurahanData,
-                    'rw_pelaksana' => $pelaksana->rw_pelaksana ?? null,
-                    'pj_pelaksana' => $pjPelaksanaData,
-                    'created_at' => $aktivitas->pelaksana_users->created_at,
-                    'updated_at' => $aktivitas->pelaksana_users->updated_at
-                ] : null,
-                'deskripsi' => $aktivitas->deskripsi,
-                'tgl_mulai' => $aktivitas->tgl_mulai,
-                'tgl_selesai' => $aktivitas->tgl_selesai,
-                'tempat_aktivitas' => $aktivitas->tempat_aktivitas,
-                'foto_aktivitas' => $aktivitas->foto_aktivitas ? env('STORAGE_SERVER_DOMAIN') . $aktivitas->foto_aktivitas : null,
-                'rw' => $aktivitas->rw,
-                'kelurahan' => $aktivitas->kelurahans ? [
-                    'id' => $aktivitas->kelurahans->id,
-                    'nama_kelurahan' => $aktivitas->kelurahans->nama_kelurahan,
-                    'kode_kelurahan' => $aktivitas->kelurahans->kode_kelurahan,
-                    'max_rw' => $aktivitas->kelurahans->max_rw,
-                    'kecamatan' => $aktivitas->kelurahans->kecamatans,
-                    'kabupaten' => $aktivitas->kelurahans->kabupaten_kotas,
-                    'provinsi' => $aktivitas->kelurahans->provinsis,
-                    'created_at' => $aktivitas->kelurahans->created_at,
-                    'updated_at' => $aktivitas->kelurahans->updated_at
-                ] : null,
-                'potensi_suara' => $aktivitas->potensi_suara,
-                'status_aktivitas' => $aktivitas->status ? [
-                    'id' => $aktivitas->status->id,
-                    'label' => $aktivitas->status->label,
-                    'created_at' => $aktivitas->status->created_at,
-                    'updated_at' => $aktivitas->status->updated_at
-                ] : null,
-                'status_aktivitas_rw' => $aktivitas->aktivitas_rws ? [
-                    'id' => $aktivitas->aktivitas_rws->id,
-                    'kelurahan' => $aktivitas->aktivitas_rws->kelurahans ? [
-                        'id' => $aktivitas->aktivitas_rws->kelurahans->id,
-                        'nama_kelurahan' => $aktivitas->aktivitas_rws->kelurahans->nama_kelurahan,
-                        'kode_kelurahan' => $aktivitas->aktivitas_rws->kelurahans->kode_kelurahan,
-                        'max_rw' => $aktivitas->aktivitas_rws->kelurahans->max_rw,
-                        'kecamatan' => $aktivitas->aktivitas_rws->kelurahans->kecamatans,
-                        'kabupaten' => $aktivitas->aktivitas_rws->kelurahans->kabupaten_kotas,
-                        'provinsi' => $aktivitas->aktivitas_rws->kelurahans->provinsis,
-                        'created_at' => $aktivitas->aktivitas_rws->kelurahans->created_at,
-                        'updated_at' => $aktivitas->aktivitas_rws->kelurahans->updated_at
+                    'kelurahan' => $pjPelaksana->kelurahan_id ? Kelurahan::whereIn('id', $pjPelaksana->kelurahan_id)->get()->map(function ($kelurahan) {
+                        return [
+                            'id' => $kelurahan->id,
+                            'nama_kelurahan' => $kelurahan->nama_kelurahan,
+                            'kode_kelurahan' => $kelurahan->kode_kelurahan,
+                            'max_rw' => $kelurahan->max_rw,
+                            'provinsi' => $kelurahan->provinsis,
+                            'kabupaten' => $kelurahan->kabupaten_kotas,
+                            'kecamatan' => $kelurahan->kecamatans,
+                            'created_at' => $kelurahan->created_at,
+                            'updated_at' => $kelurahan->updated_at
+                        ];
+                    }) : null,
+                    'rw_pelaksana' => $pjPelaksana->rw_pelaksana ?? null,
+                    'status_aktif' => $pjPelaksana->status_users ? [
+                        'id' => $pjPelaksana->status_users->id,
+                        'label' => $pjPelaksana->status_users->label,
+                        'created_at' => $pjPelaksana->status_users->created_at,
+                        'updated_at' => $pjPelaksana->status_users->updated_at
                     ] : null,
-                    'rw' => $aktivitas->aktivitas_rws->rw,
+                    'created_at' => $pjPelaksana->created_at,
+                    'updated_at' => $pjPelaksana->updated_at
+                ] : null;
+
+                return [
+                    'id' => $aktivitas->id,
+                    'pelaksana' => $aktivitas->pelaksana_users ? [
+                        'id' => $aktivitas->pelaksana_users->id,
+                        'nama' => $aktivitas->pelaksana_users->nama,
+                        'username' => $aktivitas->pelaksana_users->username,
+                        'nik_ktp' => $aktivitas->pelaksana_users->nik_ktp,
+                        'foto_profil' =>  $aktivitas->pelaksana_users->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $aktivitas->pelaksana_users->foto_profil : null,
+                        'tgl_diangkat' => $aktivitas->pelaksana_users->tgl_diangkat,
+                        'jenis_kelamin' => $aktivitas->pelaksana_users->jenis_kelamin,
+                        'role' => $role ? [
+                            'id' => $role->id,
+                            'name' => $role->name,
+                            'deskripsi' => $role->deskripsi,
+                            'created_at' => $role->created_at,
+                            'updated_at' => $role->updated_at,
+                        ] : null,
+                        'status_aktif' => $pelaksana->status_aktif,
+                        'kelurahan' => $kelurahanData,
+                        'rw_pelaksana' => $pelaksana->rw_pelaksana ?? null,
+                        'pj_pelaksana' => $pjPelaksanaData,
+                        'created_at' => $aktivitas->pelaksana_users->created_at,
+                        'updated_at' => $aktivitas->pelaksana_users->updated_at
+                    ] : null,
+                    'deskripsi' => $aktivitas->deskripsi,
+                    'tgl_mulai' => $aktivitas->tgl_mulai,
+                    'tgl_selesai' => $aktivitas->tgl_selesai,
+                    'tempat_aktivitas' => $aktivitas->tempat_aktivitas,
+                    'foto_aktivitas' => $aktivitas->foto_aktivitas ? env('STORAGE_SERVER_DOMAIN') . $aktivitas->foto_aktivitas : null,
+                    'rw' => $aktivitas->rw,
+                    'kelurahan' => $aktivitas->kelurahans ? [
+                        'id' => $aktivitas->kelurahans->id,
+                        'nama_kelurahan' => $aktivitas->kelurahans->nama_kelurahan,
+                        'kode_kelurahan' => $aktivitas->kelurahans->kode_kelurahan,
+                        'max_rw' => $aktivitas->kelurahans->max_rw,
+                        'kecamatan' => $aktivitas->kelurahans->kecamatans,
+                        'kabupaten' => $aktivitas->kelurahans->kabupaten_kotas,
+                        'provinsi' => $aktivitas->kelurahans->provinsis,
+                        'created_at' => $aktivitas->kelurahans->created_at,
+                        'updated_at' => $aktivitas->kelurahans->updated_at
+                    ] : null,
+                    'potensi_suara' => $aktivitas->potensi_suara,
                     'status_aktivitas' => $aktivitas->status ? [
                         'id' => $aktivitas->status->id,
                         'label' => $aktivitas->status->label,
                         'created_at' => $aktivitas->status->created_at,
                         'updated_at' => $aktivitas->status->updated_at
                     ] : null,
-                ] : null,
-                'created_at' => $aktivitas->created_at,
-                'updated_at' => $aktivitas->updated_at,
-            ];
-        });
+                    'status_aktivitas_rw' => $aktivitas->aktivitas_rws ? [
+                        'id' => $aktivitas->aktivitas_rws->id,
+                        'kelurahan' => $aktivitas->aktivitas_rws->kelurahans ? [
+                            'id' => $aktivitas->aktivitas_rws->kelurahans->id,
+                            'nama_kelurahan' => $aktivitas->aktivitas_rws->kelurahans->nama_kelurahan,
+                            'kode_kelurahan' => $aktivitas->aktivitas_rws->kelurahans->kode_kelurahan,
+                            'max_rw' => $aktivitas->aktivitas_rws->kelurahans->max_rw,
+                            'kecamatan' => $aktivitas->aktivitas_rws->kelurahans->kecamatans,
+                            'kabupaten' => $aktivitas->aktivitas_rws->kelurahans->kabupaten_kotas,
+                            'provinsi' => $aktivitas->aktivitas_rws->kelurahans->provinsis,
+                            'created_at' => $aktivitas->aktivitas_rws->kelurahans->created_at,
+                            'updated_at' => $aktivitas->aktivitas_rws->kelurahans->updated_at
+                        ] : null,
+                        'rw' => $aktivitas->aktivitas_rws->rw,
+                        'status_aktivitas' => $aktivitas->status ? [
+                            'id' => $aktivitas->status->id,
+                            'label' => $aktivitas->status->label,
+                            'created_at' => $aktivitas->status->created_at,
+                            'updated_at' => $aktivitas->status->updated_at
+                        ] : null,
+                    ] : null,
+                    'created_at' => $aktivitas->created_at,
+                    'updated_at' => $aktivitas->updated_at,
+                ];
+            });
 
-        return response()->json([
-            'status' => Response::HTTP_OK,
-            'message' => 'Data aktivitas berhasil ditampilkan.',
-            'data' => $formattedData,
-            'pagination' => $paginationData
-        ], Response::HTTP_OK);
+            // Bangun links pakai URL request saat ini (aman walau base URL beda)
+            $paginationData = [
+                'links' => [
+                    'first' => $request->fullUrlWithQuery(['page' => 1, 'limit' => $meta['per_page']]),
+                    'last'  => $request->fullUrlWithQuery(['page' => $meta['last_page'], 'limit' => $meta['per_page']]),
+                    'prev'  => $meta['current_page'] > 1 ? $request->fullUrlWithQuery(['page' => $meta['current_page'] - 1, 'limit' => $meta['per_page']]) : null,
+                    'next'  => $meta['current_page'] < $meta['last_page'] ? $request->fullUrlWithQuery(['page' => $meta['current_page'] + 1, 'limit' => $meta['per_page']]) : null,
+                ],
+                'meta' => $meta,
+            ];
+
+            return response()->json([
+                'status' => Response::HTTP_OK,
+                'message' => 'Data aktivitas berhasil ditampilkan.',
+                'data' => $formattedData,
+                'pagination' => $paginationData
+            ], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            Log::channel('aktivitas')->error('| Index | - Error function index : ' . $e->getMessage() . ' - Line : ' . $e->getLine());
+            return response()->json([
+                'status' => Response::HTTP_INTERNAL_SERVER_ERROR,
+                'message' => 'Terjadi kesalahan pada sistem, silahkan coba lagi nanti atau hubungi admin.',
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     public function store(StoreAktivitasPelaksanaRequest $request)
