@@ -186,7 +186,7 @@ class DetailMapController extends Controller
             if ($suaraKPU->isEmpty()) {
                 return response()->json([
                     'status' => Response::HTTP_NOT_FOUND,
-                    'message' => 'Data suara KPU tidak ditemukan untuk kelurahan ini di tahun yang dipilih.',
+                    'message' => 'Data suara KPU tidak ditemukan untuk kelurahan ini di tahun dan kategori yang dipilih.',
                     'data' => null
                 ], Response::HTTP_OK);
             }
