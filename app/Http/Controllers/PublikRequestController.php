@@ -19,6 +19,9 @@ use Illuminate\Support\Facades\Gate;
 use App\Helpers\StatusAktivitasHelper;
 use App\Helpers\VersionedCacheHelper;
 use App\Http\Resources\public\WithoutDataResource;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 
 class PublikRequestController extends Controller
@@ -967,6 +970,7 @@ class PublikRequestController extends Controller
         }
     }
 
+    // TODO: kategori_suara === 2 ngebug di total suara terbanyak, akibatnya warna terbanyak tidak muncul
     public function getDataMapsKelurahan(Request $request)
     {
         try {
@@ -976,8 +980,8 @@ class PublikRequestController extends Controller
 
             $loggedInUser = $this->loggedInUser;
 
-            $kategori_suara = $request->input('kategori_suara', []);
-            $tahun = $request->input('tahun', []);
+            $kategori_suara = array_map('intval', Arr::wrap($request->input('kategori_suara', [])));
+            $tahun          = array_map('intval', Arr::wrap($request->input('tahun', [])));
 
             if (empty($kategori_suara) || empty($tahun)) {
                 return response()->json([
@@ -987,15 +991,20 @@ class PublikRequestController extends Controller
                 ], Response::HTTP_BAD_REQUEST);
             }
 
-            VersionedCacheHelper::bump('suara_kpu', 1);
-            VersionedCacheHelper::bump('kelurahan', 1);
-            VersionedCacheHelper::bump('status_aktivitas_rw', 1);
+            $reqId = (string) Str::uuid();
+            Log::channel('public_request')->info('MAPS.START', [
+                'req_id'         => $reqId,
+                'user_id'        => $loggedInUser->id ?? null,
+                'role_id'        => $loggedInUser->role_id ?? null,
+                'kategori_suara' => $kategori_suara,
+                'tahun'          => $tahun,
+            ]);
 
-            if ($loggedInUser->role_id == 1) {
+            $kelurahan = collect();
+            if ((int) ($loggedInUser->role_id ?? 0) === 1) {
                 $kelurahan = Kelurahan::all();
-            }
-            if ($loggedInUser->kelurahan_id && !empty($loggedInUser->kelurahan_id)) {
-                $kelurahan = Kelurahan::whereIn('id', $loggedInUser->kelurahan_id)->get();
+            } elseif (!empty($loggedInUser->kelurahan_id)) {
+                $kelurahan = Kelurahan::whereIn('id', Arr::wrap($loggedInUser->kelurahan_id))->get();
             }
             if ($kelurahan->isEmpty()) {
                 return response()->json([
@@ -1005,13 +1014,19 @@ class PublikRequestController extends Controller
                 ], Response::HTTP_OK);
             }
 
+            // Log::channel('public_request')->info('MAPS.KELURAHAN.COUNT', [
+            //     'req_id'             => $reqId,
+            //     'kelurahan_count'    => $kelurahan->count(),
+            //     'kelurahan_id_sample' => $kelurahan->pluck('id')->take(2), // sample biar log tidak bengkak
+            // ]);
+
             $statusAktivitasRw = StatusAktivitasRw::whereIn('kelurahan_id', $kelurahan->pluck('id'))
                 ->with('aktivitas_status')
                 ->get();
 
-            $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $tahun, $kategori_suara) {
-                $maxRw = $kelurahan->max_rw;
-                $list_rw = array_fill(0, $maxRw, null);
+            $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $tahun, $kategori_suara, $reqId) {
+                $maxRw   = (int) $kelurahan->max_rw;
+                $list_rw = array_fill(0, max($maxRw, 0), null);
 
                 foreach ($statusAktivitasRw as $status) {
                     if ($status->kelurahan_id == $kelurahan->id && $status->rw <= $maxRw) {
@@ -1020,10 +1035,39 @@ class PublikRequestController extends Controller
                 }
                 $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
 
-                $suara_kpu = SuaraKPU::where('kelurahan_id', $kelurahan->id)
-                    ->whereIn('tahun', $tahun)
-                    ->whereIn('kategori_suara_id', $kategori_suara)
+                // $suara_kpu = SuaraKPU::where('kelurahan_id', $kelurahan->id)
+                //     ->whereIn('tahun', $tahun)
+                //     ->whereIn('kategori_suara_id', $kategori_suara)
+                //     ->get();
+
+                $suara_kpu = DB::table('suara_kpus as sk')
+                    ->join('partais as p', 'p.id', '=', 'sk.partai_id')
+                    ->where('sk.kelurahan_id', $kelurahan->id)
+                    ->whereIn('sk.tahun', $tahun)
+                    ->whereIn('sk.kategori_suara_id', $kategori_suara)
+                    ->groupBy('p.id', 'p.nama', 'p.color')
+                    ->selectRaw('p.id as partai_id, p.nama as partai_nama, COALESCE(p.color, NULL) as partai_color, SUM(sk.jumlah_suara) as total_suara')
+                    ->orderByDesc('total_suara')
                     ->get();
+
+                if ($suara_kpu->isEmpty()) {
+                    Log::channel('public_request')->warning('MAPS.KEL.EMPTY', [
+                        'req_id'        => $reqId,
+                        'kelurahan_id'  => $kelurahan->id,
+                        'kelurahan_kode' => $kelurahan->kode_kelurahan ?? null,
+                        'tahun'         => $tahun,
+                        'kategori_suara' => $kategori_suara,
+                    ]);
+                } else {
+                    Log::channel('public_request')->info('MAPS.KEL.AGG', [
+                        'req_id'        => $reqId,
+                        'kelurahan_id'  => $kelurahan->id,
+                        'rows_count'    => $suara_kpu->count(),
+                        'top_preview'   => $suara_kpu->take(2), // max 5 biar hemat log
+                        'top_partai_id' => optional($suara_kpu->first())->partai_id,
+                        'top_total'     => (int) optional($suara_kpu->first())->total_suara,
+                    ]);
+                }
 
                 $suaraKpuByPartai = $suara_kpu->where('kelurahan_id', $kelurahan->id)->groupBy('partai_id')->map(function ($items) {
                     return [

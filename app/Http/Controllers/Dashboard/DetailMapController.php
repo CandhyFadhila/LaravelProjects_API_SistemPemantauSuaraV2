@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Gate;
 use App\Http\Resources\public\WithoutDataResource;
 use App\Models\StatusAktivitasRw;
 use App\Models\UpcomingTps;
+use Illuminate\Support\Arr;
 
 class DetailMapController extends Controller
 {
@@ -157,7 +158,8 @@ class DetailMapController extends Controller
             }
 
             $kode_kelurahan = $request->input('kode_kelurahan', []);
-            $tahun = $request->input('tahun', []);
+            $kategori_suara = array_map('intval', Arr::wrap($request->input('kategori_suara', [])));
+            $tahun          = array_map('intval', Arr::wrap($request->input('tahun', [])));
             if (empty($kode_kelurahan) || empty($tahun)) {
                 return response()->json([
                     'status' => Response::HTTP_BAD_REQUEST,
@@ -177,12 +179,9 @@ class DetailMapController extends Controller
             }
 
             // Step 2: Cari data suara KPU berdasarkan id kelurahan dan filter tahun
-            $suaraKPU = SuaraKPU::whereIn('kelurahan_id', $kelurahanIds)
-                ->where(function ($query) use ($tahun) {
-                    foreach ($tahun as $year) {
-                        $query->orWhere('tahun', $year);
-                    }
-                })
+            $suaraKPU = SuaraKPU::where('kategori_suara_id', $kategori_suara)
+                ->whereIn('kelurahan_id', $kelurahanIds)
+                ->whereIn('tahun', $tahun)
                 ->get();
             if ($suaraKPU->isEmpty()) {
                 return response()->json([
@@ -205,7 +204,7 @@ class DetailMapController extends Controller
 
             $firstKelurahanId = $suaraKPU->first()->kelurahan_id;
             $groupedByPartai = $suaraKPU->where('kelurahan_id', $firstKelurahanId)->groupBy('partai_id');
-            $format_suaraKPU = $groupedByPartai->map(function ($items, $partaiId) {
+            $format_suaraKPU = $groupedByPartai->map(function ($items) {
                 $partai = $items->first()->partais;
 
                 $tpsData = $items->map(function ($item) {
