@@ -1035,20 +1035,20 @@ class PublikRequestController extends Controller
                 }
                 $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
 
-                // $suara_kpu = SuaraKPU::where('kelurahan_id', $kelurahan->id)
-                //     ->whereIn('tahun', $tahun)
-                //     ->whereIn('kategori_suara_id', $kategori_suara)
-                //     ->get();
-
-                $suara_kpu = DB::table('suara_kpus as sk')
-                    ->join('partais as p', 'p.id', '=', 'sk.partai_id')
-                    ->where('sk.kelurahan_id', $kelurahan->id)
-                    ->whereIn('sk.tahun', $tahun)
-                    ->whereIn('sk.kategori_suara_id', $kategori_suara)
-                    ->groupBy('p.id', 'p.nama', 'p.color')
-                    ->selectRaw('p.id as partai_id, p.nama as partai_nama, COALESCE(p.color, NULL) as partai_color, SUM(sk.jumlah_suara) as total_suara')
-                    ->orderByDesc('total_suara')
+                $suara_kpu = SuaraKPU::where('kelurahan_id', $kelurahan->id)
+                    ->whereIn('tahun', $tahun)
+                    ->whereIn('kategori_suara_id', $kategori_suara)
                     ->get();
+
+                // $suara_kpu = DB::table('suara_kpus as sk')
+                //     ->join('partais as p', 'p.id', '=', 'sk.partai_id')
+                //     ->where('sk.kelurahan_id', $kelurahan->id)
+                //     ->whereIn('sk.tahun', $tahun)
+                //     ->whereIn('sk.kategori_suara_id', $kategori_suara)
+                //     ->groupBy('p.id', 'p.nama', 'p.color')
+                //     ->selectRaw('p.id as partai_id, p.nama as partai_nama, COALESCE(p.color, NULL) as partai_color, SUM(sk.jumlah_suara) as total_suara')
+                //     ->orderByDesc('total_suara')
+                //     ->get();
 
                 if ($suara_kpu->isEmpty()) {
                     Log::channel('public_request')->warning('MAPS.KEL.EMPTY', [

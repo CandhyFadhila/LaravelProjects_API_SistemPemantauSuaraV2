@@ -179,7 +179,7 @@ class DetailMapController extends Controller
             }
 
             // Step 2: Cari data suara KPU berdasarkan id kelurahan dan filter tahun
-            $suaraKPU = SuaraKPU::where('kategori_suara_id', $kategori_suara)
+            $suaraKPU = SuaraKPU::whereIn('kategori_suara_id', $kategori_suara)
                 ->whereIn('kelurahan_id', $kelurahanIds)
                 ->whereIn('tahun', $tahun)
                 ->get();
