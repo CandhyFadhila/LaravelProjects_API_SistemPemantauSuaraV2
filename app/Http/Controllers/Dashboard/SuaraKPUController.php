@@ -14,9 +14,10 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Maatwebsite\Excel\Facades\Excel;
-use Illuminate\Support\Facades\Cache;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use App\Http\Requests\KPU\ImportSuaraKPURequest;
 use App\Http\Resources\public\WithoutDataResource;
+use App\Imports\KPU\SuaraKPUImportReport;
 
 class SuaraKPUController extends Controller
 {
@@ -71,18 +72,40 @@ class SuaraKPUController extends Controller
                 return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
             }
 
-            $file = $request->validated();
+
+            $file     = $request->validated();
+            $uploaded = $file['kpu_file'];
 
             try {
                 ini_set('max_execution_time', 500);
-                Excel::import(new SuaraKPUImport, $file['kpu_file']);
+
+                $spreadsheet = IOFactory::load($uploaded->getRealPath());
+                $sheetNames  = array_map(fn($s) => $s->getTitle(), $spreadsheet->getAllSheets());
+
+                $tahun    = 2024;
+                $kategori = 1;
+
+                // shared report
+                $report   = new SuaraKPUImportReport();
+                $importer = new SuaraKPUImport($tahun, $kategori, $sheetNames, $report);
+
+                Excel::import($importer, $uploaded);
 
                 VersionedCacheHelper::bump('suara_kpu', 1);
             } catch (\Exception $e) {
-                return response()->json(new WithoutDataResource(Response::HTTP_NOT_ACCEPTABLE, 'Maaf sepertinya terjadi kesalahan.' . $e->getMessage()), Response::HTTP_NOT_ACCEPTABLE);
+                return response()->json(new WithoutDataResource(Response::HTTP_NOT_ACCEPTABLE, 'Maaf sepertinya terjadi kesalahan. ' . $e->getMessage()), Response::HTTP_NOT_ACCEPTABLE);
             }
 
-            return response()->json(new WithoutDataResource(Response::HTTP_OK, 'Data suara berhasil di import kedalam database.'), Response::HTTP_OK);
+            return response()->json([
+                'status'  => Response::HTTP_OK,
+                'message' => 'Data suara berhasil di import.',
+                'data'    => [
+                    'inserted_rows'      => $report->insertedRows,
+                    'skipped_rows'       => $report->skippedRows,
+                    'missing_kecamatan'  => array_values($report->missingKecamatan),
+                    'missing_kelurahan'  => array_values($report->missingKelurahan),
+                ],
+            ], Response::HTTP_OK);
         } catch (\Exception $e) {
             Log::error('| Suara KPU | - Error function importAktivitas: ' . $e->getMessage());
             return response()->json([
