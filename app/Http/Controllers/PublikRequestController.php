@@ -1057,18 +1057,18 @@ class PublikRequestController extends Controller
                 }
                 $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
 
-                // $suara_kpu = SuaraKPU::where('kelurahan_id', $kelurahan->id)
-                //     ->whereIn('tahun', $tahun)
-                //     ->whereIn('kategori_suara_id', $kategori_suara)
-                //     ->get();
+                $suara_kpu = SuaraKPU::where('kelurahan_id', $kelurahan->id)
+                    ->whereIn('tahun', $tahun)
+                    ->whereIn('kategori_suara_id', $kategori_suara)
+                    ->get();
 
                 // Uji coba dengan cache
-                $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
-                    return SuaraKPU::where('kelurahan_id', $kelurahan->id)
-                        ->whereIn('tahun', $tahun)
-                        ->whereIn('kategori_suara_id', $kategori_suara)
-                        ->get();
-                }, now()->addMinutes(30));
+                // $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
+                //     return SuaraKPU::where('kelurahan_id', $kelurahan->id)
+                //         ->whereIn('tahun', $tahun)
+                //         ->whereIn('kategori_suara_id', $kategori_suara)
+                //         ->get();
+                // }, now()->addMinutes(30));
 
                 if ($suara_kpu->isEmpty()) {
                     Log::channel('public_request')->warning('MAPS.KEL.EMPTY', [
