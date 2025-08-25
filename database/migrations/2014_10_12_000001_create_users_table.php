@@ -27,6 +27,12 @@ return new class extends Migration
             $table->integer('pj_pelaksana')->nullable();
             $table->text('kelurahan_id')->nullable();
             $table->text('rw_pelaksana')->nullable();
+
+            // tambahan saksi
+            $table->string('email')->nullable();
+            $table->string('no_kta')->nullable();
+            $table->string('alamat')->nullable();
+
             $table->rememberToken();
             $table->timestamps();
         });

@@ -35,6 +35,10 @@ class StorePenggunaRequest extends FormRequest
             'kelurahan_id' => 'nullable',
             'rw_pelaksana' => 'nullable',
             'password' => 'required',
+
+            'email'          => 'nullable|email:rfc',
+            'no_kta'         => 'nullable|string|max:100|unique:users,no_kta',
+            'alamat'         => 'nullable|string|max:255',
         ];
     }
 
@@ -58,6 +62,11 @@ class StorePenggunaRequest extends FormRequest
             'role_id.required' => 'Role pengguna tidak diperbolehkan kosong.',
             'role_id.integer' => 'Role pengguna tidak diperbolehkan mengandung selain angka.',
             'password.required' => 'Password pengguna tidak diperbolehkan kosong.',
+
+            'email.email'            => 'Format email tidak valid.',
+            'no_kta.max'             => 'Nomor KTA tidak boleh melebihi 100 karakter.',
+            'no_kta.unique'          => 'Nomor KTA sudah terdaftar.',
+            'alamat.max'             => 'Alamat tidak boleh melebihi 255 karakter.',
         ];
     }
 

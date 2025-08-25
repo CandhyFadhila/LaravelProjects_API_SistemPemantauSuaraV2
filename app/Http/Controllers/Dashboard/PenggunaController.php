@@ -95,7 +95,7 @@ class PenggunaController extends Controller
                         'total'        => $p->total(),
                     ],
                 ];
-            }, now()->addMinutes(10));
+            }, now()->addMinutes(30));
 
             $items = collect($payload['items']);
             $meta  = $payload['meta'];
@@ -142,6 +142,9 @@ class PenggunaController extends Controller
                 $pjPelaksanaData = $pjPelaksana ? [
                     'id' => $pjPelaksana->id,
                     'nama' => $pjPelaksana->nama,
+                    'email' => $pjPelaksana->email,
+                    'no_kta' => $pjPelaksana->no_kta,
+                    'alamat' => $pjPelaksana->alamat,
                     'username' => $pjPelaksana->username,
                     'jenis_kelamin' => $pjPelaksana->jenis_kelamin,
                     'foto_profil' => $pjPelaksana->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $pjPelaksana->foto_profil : null,
@@ -183,6 +186,9 @@ class PenggunaController extends Controller
                     'id' => $user->id,
                     'nama' => $user->nama,
                     'username' => $user->username,
+                    'email' => $user->email,
+                    'no_kta' => $user->no_kta,
+                    'alamat' => $user->alamat,
                     'jenis_kelamin' => $user->jenis_kelamin,
                     'foto_profil' => $user->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $user->foto_profil : null,
                     'nik_ktp' => $user->nik_ktp,
@@ -245,10 +251,10 @@ class PenggunaController extends Controller
         $loggedInUser = $this->loggedInUser;
 
         // Validasi role_id = 1 hanya bisa membuat role_id = 2
-        if ($loggedInUser->role_id == 1 && $data['role_id'] != 2) {
+        if ($loggedInUser->role_id == 1 && !in_array($data['role_id'], [2, 4], true)) {
             return response()->json([
                 'status' => Response::HTTP_FORBIDDEN,
-                'message' => 'Pengguna dengan role Super Admin hanya bisa membuat pengguna dengan peran Penanggung Jawab.'
+                'message' => 'Pengguna dengan role Super Admin hanya bisa membuat pengguna dengan role Penanggung Jawab.'
             ], Response::HTTP_FORBIDDEN);
         }
 
@@ -256,7 +262,7 @@ class PenggunaController extends Controller
         if ($loggedInUser->role_id == 2 && $data['role_id'] != 3) {
             return response()->json([
                 'status' => Response::HTTP_FORBIDDEN,
-                'message' => 'Pengguna dengan role Penanggung Jawab hanya bisa membuat pengguna dengan peran Penggerak.'
+                'message' => 'Pengguna dengan role Penanggung Jawab hanya bisa membuat pengguna dengan role Penggerak.'
             ], Response::HTTP_FORBIDDEN);
         }
 
@@ -323,6 +329,10 @@ class PenggunaController extends Controller
             'rw_pelaksana' => $rwPelaksana,
             'pj_pelaksana' => $pjPelaksana,
             'password' => Hash::make($password),
+
+            'email'         => $data['email']  ?? null,
+            'no_kta'        => $data['no_kta'] ?? null,
+            'alamat'        => $data['alamat'] ?? null,
         ];
         $createUser = User::create($user);
         // Ambil nama role berdasarkan role_id
@@ -382,6 +392,9 @@ class PenggunaController extends Controller
             'id' => $pjPelaksana->id,
             'nama' => $pjPelaksana->nama,
             'username' => $pjPelaksana->username,
+            'email' => $pjPelaksana->email,
+            'no_kta' => $pjPelaksana->no_kta,
+            'alamat' => $pjPelaksana->alamat,
             'jenis_kelamin' => $pjPelaksana->jenis_kelamin,
             'foto_profil' => $pjPelaksana->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $pjPelaksana->foto_profil : null,
             'nik_ktp' => $pjPelaksana->nik_ktp,
@@ -422,6 +435,9 @@ class PenggunaController extends Controller
             'id' => $user->id,
             'nama' => $user->nama,
             'username' => $user->username,
+            'email' => $user->email,
+            'no_kta' => $user->no_kta,
+            'alamat' => $user->alamat,
             'jenis_kelamin' => $user->jenis_kelamin,
             'foto_profil' => $user->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $user->foto_profil : null,
             'nik_ktp' => $user->nik_ktp,
@@ -492,6 +508,9 @@ class PenggunaController extends Controller
         }
 
         $user->nama = $validatedData['nama'] ?? $user->nama;
+        $user->email = $validatedData['email'] ?? $user->email;
+        $user->no_kta = $validatedData['no_kta'] ?? $user->no_kta;
+        $user->alamat = $validatedData['alamat'] ?? $user->alamat;
         $user->jenis_kelamin = $validatedData['jenis_kelamin'] ?? $user->jenis_kelamin;
         $user->nik_ktp = $validatedData['nik_ktp'] ?? $user->nik_ktp;
         $user->no_hp = $validatedData['no_hp'] ?? $user->no_hp;

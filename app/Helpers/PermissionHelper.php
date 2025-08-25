@@ -27,6 +27,13 @@ class PermissionHelper
 				'import aktivitas',
 				'export aktivitas',
 
+				// 'create aktivitasSaksi',
+				// 'edit aktivitasSaksi',
+				// 'delete aktivitasSaksi',
+				'view aktivitasSaksi',
+				'import aktivitasSaksi',
+				'export aktivitasSaksi',
+
 				'view suaraKPU',
 				// 'create suaraKPU',
 				// 'edit suaraKPU',
@@ -58,6 +65,13 @@ class PermissionHelper
 				'import aktivitas',
 				'export aktivitas',
 
+				'create aktivitasSaksi',
+				'edit aktivitasSaksi',
+				'delete aktivitasSaksi',
+				'view aktivitasSaksi',
+				'import aktivitasSaksi',
+				'export aktivitasSaksi',
+
 				'view suaraKPU',
 
 				'create upcomingTPS',
@@ -76,6 +90,24 @@ class PermissionHelper
 				'view aktivitas',
 				'import aktivitas',
 				'export aktivitas',
+
+				'view suaraKPU',
+
+				'create upcomingTPS',
+				'edit upcomingTPS',
+				'delete upcomingTPS',
+				'view upcomingTPS',
+			],
+			4 => [
+				'view publikRequest',
+
+				'update password',
+
+				'create aktivitasSaksi',
+				'edit aktivitasSaksi',
+				'view aktivitasSaksi',
+				'import aktivitasSaksi',
+				'export aktivitasSaksi',
 
 				'view suaraKPU',
 

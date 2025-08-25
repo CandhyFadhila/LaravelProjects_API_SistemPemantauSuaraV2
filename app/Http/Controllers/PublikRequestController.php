@@ -20,7 +20,6 @@ use App\Helpers\StatusAktivitasHelper;
 use App\Helpers\VersionedCacheHelper;
 use App\Http\Resources\public\WithoutDataResource;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 
@@ -115,6 +114,9 @@ class PublikRequestController extends Controller
                 'id' => $pjPelaksana->id,
                 'nama' => $pjPelaksana->nama,
                 'username' => $pjPelaksana->username,
+                'email' => $pjPelaksana->email,
+                'no_kta' => $pjPelaksana->no_kta,
+                'alamat' => $pjPelaksana->alamat,
                 'jenis_kelamin' => $pjPelaksana->jenis_kelamin,
                 'foto_profil' => $pjPelaksana->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $pjPelaksana->foto_profil : null,
                 'nik_ktp' => $pjPelaksana->nik_ktp,
@@ -141,6 +143,9 @@ class PublikRequestController extends Controller
                 'id' => $user->id,
                 'nama' => $user->nama,
                 'username' => $user->username,
+                'email' => $user->email,
+                'no_kta' => $user->no_kta,
+                'alamat' => $user->alamat,
                 'jenis_kelamin' => $user->jenis_kelamin,
                 'foto_profil' => $user->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $user->foto_profil : null,
                 'nik_ktp' => $user->nik_ktp,
@@ -398,6 +403,9 @@ class PublikRequestController extends Controller
                     'id' => $pjPelaksana->id,
                     'nama' => $pjPelaksana->nama,
                     'username' => $pjPelaksana->username,
+                    'email' => $pjPelaksana->email,
+                    'no_kta' => $pjPelaksana->no_kta,
+                    'alamat' => $pjPelaksana->alamat,
                     'jenis_kelamin' => $pjPelaksana->jenis_kelamin,
                     'foto_profil' => $pjPelaksana->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $pjPelaksana->foto_profil : null,
                     'nik_ktp' => $pjPelaksana->nik_ktp,
@@ -438,6 +446,9 @@ class PublikRequestController extends Controller
                     'id' => $user->id,
                     'nama' => $user->nama,
                     'username' => $user->username,
+                    'email' => $user->email,
+                    'no_kta' => $user->no_kta,
+                    'alamat' => $user->alamat,
                     'jenis_kelamin' => $user->jenis_kelamin,
                     'foto_profil' => $user->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $user->foto_profil : null,
                     'nik_ktp' => $user->nik_ktp,
@@ -546,6 +557,9 @@ class PublikRequestController extends Controller
                     'id' => $pjPelaksana->id,
                     'nama' => $pjPelaksana->nama,
                     'username' => $pjPelaksana->username,
+                    'email' => $pjPelaksana->email,
+                    'no_kta' => $pjPelaksana->no_kta,
+                    'alamat' => $pjPelaksana->alamat,
                     'jenis_kelamin' => $pjPelaksana->jenis_kelamin,
                     'foto_profil' => $pjPelaksana->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $pjPelaksana->foto_profil : null,
                     'nik_ktp' => $pjPelaksana->nik_ktp,
@@ -586,6 +600,9 @@ class PublikRequestController extends Controller
                     'id' => $user->id,
                     'nama' => $user->nama,
                     'username' => $user->username,
+                    'email' => $user->email,
+                    'no_kta' => $user->no_kta,
+                    'alamat' => $user->alamat,
                     'jenis_kelamin' => $user->jenis_kelamin,
                     'foto_profil' => $user->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $user->foto_profil : null,
                     'nik_ktp' => $user->nik_ktp,
@@ -747,6 +764,9 @@ class PublikRequestController extends Controller
                         'id' => $aktivitas->pelaksana_users->id,
                         'nama' => $aktivitas->pelaksana_users->nama,
                         'username' => $aktivitas->pelaksana_users->username,
+                        'email' => $aktivitas->pelaksana_users->email,
+                        'no_kta' => $aktivitas->pelaksana_users->no_kta,
+                        'alamat' => $aktivitas->pelaksana_users->alamat,
                         'nik_ktp' => $aktivitas->pelaksana_users->nik_ktp,
                         'foto_profil' =>  $aktivitas->pelaksana_users->foto_profil ? env('STORAGE_SERVER_DOMAIN') . $aktivitas->pelaksana_users->foto_profil : null,
                         'tgl_diangkat' => $aktivitas->pelaksana_users->tgl_diangkat,
@@ -970,7 +990,6 @@ class PublikRequestController extends Controller
         }
     }
 
-    // TODO: kategori_suara === 2 ngebug di total suara terbanyak, akibatnya warna terbanyak tidak muncul
     public function getDataMapsKelurahan(Request $request)
     {
         try {
@@ -1000,6 +1019,9 @@ class PublikRequestController extends Controller
                 'tahun'          => $tahun,
             ]);
 
+            $routeKey = optional($request->route())->getName() ?? $request->path();
+            $parts    = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [], 0);
+
             $kelurahan = collect();
             if ((int) ($loggedInUser->role_id ?? 0) === 1) {
                 $kelurahan = Kelurahan::all();
@@ -1024,7 +1046,7 @@ class PublikRequestController extends Controller
                 ->with('aktivitas_status')
                 ->get();
 
-            $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $tahun, $kategori_suara, $reqId) {
+            $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $tahun, $kategori_suara, $reqId, $parts) {
                 $maxRw   = (int) $kelurahan->max_rw;
                 $list_rw = array_fill(0, max($maxRw, 0), null);
 
@@ -1035,20 +1057,18 @@ class PublikRequestController extends Controller
                 }
                 $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
 
-                $suara_kpu = SuaraKPU::where('kelurahan_id', $kelurahan->id)
-                    ->whereIn('tahun', $tahun)
-                    ->whereIn('kategori_suara_id', $kategori_suara)
-                    ->get();
-
-                // $suara_kpu = DB::table('suara_kpus as sk')
-                //     ->join('partais as p', 'p.id', '=', 'sk.partai_id')
-                //     ->where('sk.kelurahan_id', $kelurahan->id)
-                //     ->whereIn('sk.tahun', $tahun)
-                //     ->whereIn('sk.kategori_suara_id', $kategori_suara)
-                //     ->groupBy('p.id', 'p.nama', 'p.color')
-                //     ->selectRaw('p.id as partai_id, p.nama as partai_nama, COALESCE(p.color, NULL) as partai_color, SUM(sk.jumlah_suara) as total_suara')
-                //     ->orderByDesc('total_suara')
+                // $suara_kpu = SuaraKPU::where('kelurahan_id', $kelurahan->id)
+                //     ->whereIn('tahun', $tahun)
+                //     ->whereIn('kategori_suara_id', $kategori_suara)
                 //     ->get();
+
+                // Uji coba dengan cache
+                $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
+                    return SuaraKPU::where('kelurahan_id', $kelurahan->id)
+                        ->whereIn('tahun', $tahun)
+                        ->whereIn('kategori_suara_id', $kategori_suara)
+                        ->get();
+                }, now()->addMinutes(30));
 
                 if ($suara_kpu->isEmpty()) {
                     Log::channel('public_request')->warning('MAPS.KEL.EMPTY', [

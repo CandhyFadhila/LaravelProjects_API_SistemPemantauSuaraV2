@@ -33,6 +33,10 @@ class UpdatePenggunaRequest extends FormRequest
             'role_id' => 'required|integer',
             'kelurahan_id' => 'nullable',
             'rw_pelaksana' => 'nullable',
+
+            'email'          => 'nullable|email:rfc',
+            'no_kta'         => 'nullable|string|max:100|unique:users,no_kta',
+            'alamat'         => 'nullable|string|max:255',
         ];
     }
 
@@ -53,6 +57,11 @@ class UpdatePenggunaRequest extends FormRequest
             'foto_profil.max' => 'Ukuran file foto yang diperbolehkan maksimal 5 MB.',
             'role_id.required' => 'Role pengguna tidak diperbolehkan kosong.',
             'role_id.integer' => 'Role pengguna tidak diperbolehkan mengandung selain angka.',
+
+            'email.email'            => 'Format email tidak valid.',
+            'no_kta.max'             => 'Nomor KTA tidak boleh melebihi 100 karakter.',
+            'no_kta.unique'          => 'Nomor KTA sudah terdaftar.',
+            'alamat.max'             => 'Alamat tidak boleh melebihi 255 karakter.',
         ];
     }
 

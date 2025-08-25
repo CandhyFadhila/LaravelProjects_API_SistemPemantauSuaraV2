@@ -16,6 +16,7 @@ class PermissionSeeder extends Seeder
         $permissions = [
             'Manajemen Pengguna' => ['create pengguna', 'edit pengguna', 'view pengguna', 'import pengguna', 'export pengguna', 'aktifkan pengguna', 'reset password', 'update password'],
             'Manajemen Aktivitas' => ['create aktivitas', 'edit aktivitas', 'delete aktivitas', 'view aktivitas', 'import aktivitas', 'export aktivitas'],
+            'Manajemen Saksi' => ['create aktivitasSaksi', 'edit aktivitasSaksi', 'delete aktivitasSaksi', 'view aktivitasSaksi', 'import aktivitasSaksi', 'export aktivitasSaksi'],
             'Manajemen KPU' => ['create suaraKPU', 'edit suaraKPU', 'delete suaraKPU', 'view suaraKPU', 'import suaraKPU', 'export suaraKPU'],
             'Manajemen TPS' => ['create upcomingTPS', 'edit upcomingTPS', 'delete upcomingTPS', 'view upcomingTPS', 'import upcomingTPS', 'export upcomingTPS'],
             'Publik Request' => ['view publikRequest'],
