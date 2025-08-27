@@ -27,8 +27,6 @@ class UpdateAktivitasSaksiRequest extends FormRequest
         return [
             'rw' => 'required|integer',
             'tps' => 'required|integer',
-            'saksi_id' => 'required|integer|exists:users,id',
-            'status_aktivitas' => 'required|integer|exists:status_aktivitas,id',
             'deskripsi' => 'nullable|string',
             'tgl_mulai' => 'required|string',
             'tgl_selesai' => 'required|string',
@@ -44,6 +42,8 @@ class UpdateAktivitasSaksiRequest extends FormRequest
         return [
             'rw.required' => 'Lokasi RW tidak diperbolehkan kosong.',
             'rw.integer' => 'Lokasi RW tidak diperbolehkan mengandung selain angka.',
+            'tps.required' => 'Lokasi TPS tidak diperbolehkan kosong.',
+            'tps.integer' => 'Lokasi TPS tidak diperbolehkan mengandung selain angka.',
             'saksi_id.required' => 'Nama saksi tidak diperbolehkan kosong.',
             'saksi_id.integer' => 'Nama saksi tidak diperbolehkan mengandung selain angka.',
             'saksi_id.exists' => 'Nama saksi tersebut tidak ada dalam database.',
