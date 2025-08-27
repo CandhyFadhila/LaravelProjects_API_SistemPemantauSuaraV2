@@ -250,16 +250,19 @@ class PenggunaController extends Controller
 
         $loggedInUser = $this->loggedInUser;
 
+        $actorRoleId  = (int) $loggedInUser->role_id;
+        $targetRoleId = (int) $data['role_id'];
+
         // Validasi role_id = 1 hanya bisa membuat role_id = 2
-        if ($loggedInUser->role_id == 1 && !in_array($data['role_id'], [2, 4], true)) {
+        if ($actorRoleId === 1 && !in_array($targetRoleId, [2, 4], true)) {
             return response()->json([
                 'status' => Response::HTTP_FORBIDDEN,
-                'message' => 'Pengguna dengan role Super Admin hanya bisa membuat pengguna dengan role Penanggung Jawab dan Saksi.'
+                'message' => 'Pengguna dengan role Super Admin hanya bisa membuat pengguna dengan role Penanggung Jawab atau Saksi.'
             ], Response::HTTP_FORBIDDEN);
         }
 
         // Validasi role_id = 2 hanya bisa membuat role_id = 3
-        if ($loggedInUser->role_id == 2 && $data['role_id'] != 3) {
+        if ($actorRoleId === 2 && $targetRoleId !== 3) {
             return response()->json([
                 'status' => Response::HTTP_FORBIDDEN,
                 'message' => 'Pengguna dengan role Penanggung Jawab hanya bisa membuat pengguna dengan role Penggerak.'
@@ -267,7 +270,7 @@ class PenggunaController extends Controller
         }
 
         // Validasi: Jika bukan role_id = 2, pengguna tidak diperbolehkan mengisi rw_pelaksana
-        if ($loggedInUser->role_id != 2 && isset($data['rw_pelaksana'])) {
+        if ($actorRoleId !== 2 && isset($data['rw_pelaksana'])) {
             return response()->json([
                 'status' => Response::HTTP_FORBIDDEN,
                 'message' => 'Hanya pengguna dengan role Penanggung Jawab yang diperbolehkan menginputkan RW Pelaksana.'
@@ -480,21 +483,47 @@ class PenggunaController extends Controller
         $loggedInUser = $this->loggedInUser;
         $user = User::findOrFail($id);
 
-        if ($loggedInUser->role_id == 1 && $user->role_id != 2) {
+        $actorRoleId        = (int) $loggedInUser->role_id;       // role si pengedit
+        $currentTargetRole  = (int) $user->role_id;               // role user yang sedang diedit (saat ini)
+        $validatedData      = $request->validated();
+        $proposedTargetRole = isset($validatedData['role_id'])
+            ? (int) $validatedData['role_id']                    // role yang DIINGINKAN setelah update
+            : $currentTargetRole;
+
+        if ($actorRoleId === 1 && !in_array($currentTargetRole, [2, 4], true)) {
             return response()->json([
                 'status' => Response::HTTP_FORBIDDEN,
-                'message' => 'Super Admin hanya bisa mengedit pengguna dengan peran Penanggung Jawab.'
+                'message' => 'Super Admin hanya bisa mengedit pengguna dengan peran Penanggung Jawab atau Saksi.'
             ], Response::HTTP_FORBIDDEN);
         }
 
-        if ($loggedInUser->role_id == 2 && $user->role_id != 3) {
+        if ($actorRoleId === 2 && $currentTargetRole !== 3) {
             return response()->json([
                 'status' => Response::HTTP_FORBIDDEN,
                 'message' => 'Penanggung Jawab hanya bisa mengedit pengguna dengan peran Penggerak.'
             ], Response::HTTP_FORBIDDEN);
         }
 
-        $validatedData = $request->validated();
+        if ($actorRoleId === 1 && isset($validatedData['role_id']) && !in_array($proposedTargetRole, [2, 4], true)) {
+            return response()->json([
+                'status'  => Response::HTTP_FORBIDDEN,
+                'message' => 'Super Admin hanya bisa mengubah peran menjadi Penanggung Jawab atau Saksi.'
+            ], Response::HTTP_FORBIDDEN);
+        }
+        if ($actorRoleId === 2 && isset($validatedData['role_id']) && $proposedTargetRole !== 3) {
+            return response()->json([
+                'status'  => Response::HTTP_FORBIDDEN,
+                'message' => 'Penanggung Jawab hanya bisa mengubah peran menjadi Penggerak.'
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        // (Opsional) selaraskan aturan rw_pelaksana seperti di store:
+        if ($actorRoleId !== 2 && array_key_exists('rw_pelaksana', $validatedData)) {
+            return response()->json([
+                'status'  => Response::HTTP_FORBIDDEN,
+                'message' => 'Hanya pengguna dengan role Penanggung Jawab yang diperbolehkan menginputkan RW Pelaksana.'
+            ], Response::HTTP_FORBIDDEN);
+        }
 
         if ($request->hasFile('foto_profil')) {
             // Hapus foto lama jika ada
