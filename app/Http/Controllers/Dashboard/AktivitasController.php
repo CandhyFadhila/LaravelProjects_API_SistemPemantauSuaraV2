@@ -15,7 +15,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Maatwebsite\Excel\Facades\Excel;
-use Illuminate\Support\Facades\Cache;
 use App\Exports\Aktivitas\AktivitasExport;
 use App\Imports\Aktivitas\AktivitasImport;
 use App\Helpers\Filters\AktivitasFilterHelper;
@@ -25,7 +24,6 @@ use App\Http\Requests\Aktivitas\ImportAktivitasRequest;
 use App\Http\Requests\Aktivitas\StoreAktivitasPelaksanaRequest;
 use App\Http\Requests\Aktivitas\UpdateAktivitasPelaksanaRequest;
 use Illuminate\Support\Arr;
-use PhpParser\Node\Stmt\TryCatch;
 
 class AktivitasController extends Controller
 {

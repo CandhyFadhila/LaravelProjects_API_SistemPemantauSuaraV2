@@ -135,6 +135,13 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'aktivitas_saksi' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/Modules/Saksi/aktivitas_saksi.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'replace_placeholders' => true,
+        ],
+
         'pengguna' => [
             'driver' => 'single',
             'path' => storage_path('logs/Modules/Pengguna/pengguna.log'),

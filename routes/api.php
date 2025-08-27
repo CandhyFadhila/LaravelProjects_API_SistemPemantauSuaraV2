@@ -3,6 +3,7 @@
 use App\Http\Controllers\Dashboard\AktivitasController;
 use App\Http\Controllers\Dashboard\DetailMapController;
 use App\Http\Controllers\Dashboard\PenggunaController;
+use App\Http\Controllers\Dashboard\SaksiController;
 use App\Http\Controllers\Dashboard\SuaraKPUController;
 use App\Http\Controllers\Dashboard\UpcomingTPSController;
 use Illuminate\Http\Request;
@@ -67,6 +68,11 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/export-aktivitas', [AktivitasController::class, 'exportAktivitas']);
             Route::post('/import-aktivitas', [AktivitasController::class, 'importAktivitas']);
             Route::apiResource('/aktivitas', AktivitasController::class);
+
+            Route::post('/get-aktivitas-saksi', [SaksiController::class, 'index']);
+            Route::get('/export-aktivitas-saksi', [SaksiController::class, 'exportAktivitasSaksi']);
+            Route::post('/import-aktivitas-saksi', [SaksiController::class, 'importAktivitasSaksi']);
+            Route::apiResource('/aktivitas-saksi', SaksiController::class);
 
             Route::apiResource('/tps-mendatang', UpcomingTPSController::class);
         });
