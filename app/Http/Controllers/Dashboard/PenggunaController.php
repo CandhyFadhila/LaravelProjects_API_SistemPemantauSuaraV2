@@ -305,17 +305,13 @@ class PenggunaController extends Controller
             }
         }
 
-        // if ($loggedInUser->role_id == 2 && $data['role_id'] == 3) {
-        //     $kelurahanIds = $loggedInUser->kelurahan_id;
-        // }
-
         $rwPelaksana = null;
         if ($loggedInUser->role_id == 2 && $data['role_id'] == 3) {
             $rwPelaksana = $data['rw_pelaksana'] ?? null;
         }
 
         $pjPelaksana = null;
-        if ($loggedInUser->role_id == 2 && $data['role_id'] == 3) {
+        if ($loggedInUser->role_id == 2 && in_array($data['role_id'], [3, 4], true)) {
             $pjPelaksana = $loggedInUser->id;
         }
 

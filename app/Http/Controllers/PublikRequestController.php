@@ -353,7 +353,7 @@ class PublikRequestController extends Controller
                 $q->where('id', '!=', 1);
             } elseif ($loggedInUser->role_id == 2) {
                 // PJ: hanya penggerak aktif dibawahnya
-                $q->where('role_id', 3)
+                $q->whereIn('role_id', [3, 4])
                     ->where('status_aktif', 2)
                     ->where('pj_pelaksana', $loggedInUser->id);
             } else {
@@ -507,7 +507,7 @@ class PublikRequestController extends Controller
                 $q->where('role_id', 3);
             } elseif ($loggedInUser->role_id == 2) {
                 // Penanggung Jawab: get Penggerak under them
-                $q->where('role_id', 3)
+                $q->whereIn('role_id', [3, 4])
                     ->where('status_aktif', 2) // Only active Penggerak
                     ->where('pj_pelaksana', $loggedInUser->id); // Only Penggerak under current Penanggung Jawab
             } else {
@@ -868,7 +868,7 @@ class PublikRequestController extends Controller
             } elseif ($loggedInUser->role_id == 2) {
                 $q->where(function ($query) use ($loggedInUser) {
                     $query->whereHas('saksi_users', function ($subQuery) use ($loggedInUser) {
-                        $subQuery->where('role_id', 3)->where('pj_pelaksana', $loggedInUser->id);
+                        $subQuery->where('role_id', 4)->where('pj_pelaksana', $loggedInUser->id);
                     })->orWhere('saksi', $loggedInUser->id);
                 });
             } elseif ($loggedInUser->role_id == 3) {

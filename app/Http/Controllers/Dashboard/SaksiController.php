@@ -73,7 +73,7 @@ class SaksiController extends Controller
             } elseif ($loggedInUser->role_id == 2) {
                 $q->where(function ($query) use ($loggedInUser) {
                     $query->whereHas('saksi_users', function ($subQuery) use ($loggedInUser) {
-                        $subQuery->where('role_id', 3)->where('pj_pelaksana', $loggedInUser->id);
+                        $subQuery->where('role_id', 4)->where('pj_pelaksana', $loggedInUser->id);
                     })->orWhere('saksi', $loggedInUser->id);
                 });
             } elseif ($loggedInUser->role_id == 3) {
