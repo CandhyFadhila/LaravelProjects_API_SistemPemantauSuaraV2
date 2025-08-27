@@ -356,6 +356,8 @@ class PublikRequestController extends Controller
                 $q->whereIn('role_id', [3, 4])
                     ->where('status_aktif', 2)
                     ->where('pj_pelaksana', $loggedInUser->id);
+            } elseif ($loggedInUser->role_id == 4) {
+                $q->where('id', '!=', 1);
             } else {
                 return response()->json([
                     'status'  => Response::HTTP_FORBIDDEN,

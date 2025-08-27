@@ -110,11 +110,6 @@ class PermissionHelper
 				'export aktivitasSaksi',
 
 				'view suaraKPU',
-
-				'create upcomingTPS',
-				'edit upcomingTPS',
-				'delete upcomingTPS',
-				'view upcomingTPS',
 			]
 		];
 
