@@ -56,7 +56,6 @@ class SaksiController extends Controller
             $page  = $page <= 0 ? 1 : $page;
             $loggedInUser = $this->loggedInUser;
 
-            // Base query + eager load (hindari N+1)
             $q = AktivitasSaksi::query()
                 ->with([
                     'saksi_users.roles',
@@ -76,8 +75,6 @@ class SaksiController extends Controller
                         $subQuery->where('role_id', 4)->where('pj_pelaksana', $loggedInUser->id);
                     })->orWhere('saksi', $loggedInUser->id);
                 });
-            } elseif ($loggedInUser->role_id == 3) {
-                $q->where('saksi', $loggedInUser->id);
             } elseif ($loggedInUser->role_id == 4) {
                 $q->where('saksi', $loggedInUser->id);
             } else {
