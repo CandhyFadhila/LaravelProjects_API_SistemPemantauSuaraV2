@@ -73,7 +73,7 @@ class SaksiController extends Controller
             } elseif ($loggedInUser->role_id == 2) {
                 $q->where(function ($query) use ($loggedInUser) {
                     $query->whereHas('saksi_users', function ($subQuery) use ($loggedInUser) {
-                        $subQuery->where('role_id', 4)->where('pj_pelaksana', $loggedInUser->id);
+                        $subQuery->where('role_id', 3)->where('pj_pelaksana', $loggedInUser->id);
                     })->orWhere('saksi', $loggedInUser->id);
                 });
             } elseif ($loggedInUser->role_id == 3) {
@@ -666,6 +666,7 @@ class SaksiController extends Controller
 
             try {
                 Excel::import(new AktivitasSaksiImport, $file['aktivitas_saksi_file']);
+                VersionedCacheHelper::bump(AktivitasSaksi::CACHE_NAMESPACE, 1);
             } catch (\Exception $e) {
                 return response()->json(new WithoutDataResource(Response::HTTP_NOT_ACCEPTABLE, 'Maaf sepertinya terjadi kesalahan.' . $e->getMessage()), Response::HTTP_NOT_ACCEPTABLE);
             }
