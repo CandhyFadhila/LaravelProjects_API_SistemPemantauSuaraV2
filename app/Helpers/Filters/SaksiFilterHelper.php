@@ -39,7 +39,7 @@ class SaksiFilterHelper
 			$query->where(function ($query) use ($searchTerms) {
 				foreach ($searchTerms as $term) {
 					$searchTerm = '%' . $term . '%';
-					$query->orWhereHas('pelaksana_users', function ($query) use ($searchTerm) {
+					$query->orWhereHas('saksi_users', function ($query) use ($searchTerm) {
 						$query->where('nama', 'like', $searchTerm);
 					});
 				}
