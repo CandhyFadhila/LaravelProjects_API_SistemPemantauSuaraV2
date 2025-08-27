@@ -254,7 +254,7 @@ class PenggunaController extends Controller
         if ($loggedInUser->role_id == 1 && !in_array($data['role_id'], [2, 4], true)) {
             return response()->json([
                 'status' => Response::HTTP_FORBIDDEN,
-                'message' => 'Pengguna dengan role Super Admin hanya bisa membuat pengguna dengan role Penanggung Jawab.'
+                'message' => 'Pengguna dengan role Super Admin hanya bisa membuat pengguna dengan role Penanggung Jawab dan Saksi.'
             ], Response::HTTP_FORBIDDEN);
         }
 
