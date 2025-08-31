@@ -55,6 +55,7 @@ class PenggunaController extends Controller
             $page  = (int) $request->input('page', 1);
             $limit = $limit <= 0 ? 10 : $limit;
             $page  = $page <= 0 ? 1 : $page;
+
             $loggedInUser = $this->loggedInUser;
 
             $q = User::query()
@@ -81,26 +82,17 @@ class PenggunaController extends Controller
             $filters = Arr::sortRecursive($request->except(['limit', 'page']));
             $q = UserFilterHelper::applyFiltersUser($q, $filters);
 
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts    = VersionedCacheHelper::standardPagedParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, $filters, $page, $limit);
+            $p = $q->paginate($limit, ['*'], 'page', $page);
+            $items = collect($p->items());
 
-            $payload = VersionedCacheHelper::remember('users', $parts, function () use ($q, $limit, $page) {
-                $p = $q->paginate($limit, ['*'], 'page', $page); // 1 query + count
-                return [
-                    'items' => $p->items(), // Eloquent models (sudah eager loaded)
-                    'meta'  => [
-                        'current_page' => $p->currentPage(),
-                        'last_page'    => $p->lastPage(),
-                        'per_page'     => $p->perPage(),
-                        'total'        => $p->total(),
-                    ],
-                ];
-            }, now()->addMinutes(30));
+            $meta  = [
+                'current_page' => $p->currentPage(),
+                'last_page'    => $p->lastPage(),
+                'per_page'     => $p->perPage(),
+                'total'        => $p->total(),
+            ];
 
-            $items = collect($payload['items']);
-            $meta  = $payload['meta'];
-
-            if ($items->isEmpty()) {
+            if ($p->total() === 0) {
                 return response()->json([
                     'status'     => Response::HTTP_NOT_FOUND,
                     'message'    => 'Data pengguna tidak ditemukan.',

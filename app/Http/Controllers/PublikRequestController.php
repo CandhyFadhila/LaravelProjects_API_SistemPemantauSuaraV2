@@ -261,34 +261,24 @@ class PublikRequestController extends Controller
         ], Response::HTTP_OK);
     }
 
-    // Cache
-    public function getAllStatusAktivitasRW(Request $request)
+    public function getAllStatusAktivitasRW()
     {
         try {
             if (!Gate::allows('view publikRequest')) {
                 return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
             }
 
-            $loggedInUser = $this->loggedInUser;
-
-            $q = StatusAktivitasRw::query()
+            $status_rw = StatusAktivitasRw::query()
                 ->with([
                     'kelurahans.provinsis',
                     'kelurahans.kabupaten_kotas',
                     'kelurahans.kecamatans',
                     'aktivitas_status',
                 ])
-                ->orderBy('created_at', 'desc');
+                ->orderBy('created_at', 'desc')
+                ->get();
 
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts    = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [], 0);
-
-            // Ambil dari cache SETELAH query siap
-            $rows = VersionedCacheHelper::remember('aktivitas', $parts, function () use ($q) {
-                return $q->get();
-            }, now()->addMinutes(30));
-
-            if ($rows->isEmpty()) {
+            if ($status_rw->isEmpty()) {
                 return response()->json([
                     'status'  => Response::HTTP_NOT_FOUND,
                     'message' => 'Data status aktivitas rw tidak ditemukan.',
@@ -296,7 +286,7 @@ class PublikRequestController extends Controller
                 ], Response::HTTP_OK);
             }
 
-            $formattedData = $rows->map(function ($status_rw) {
+            $formattedData = $status_rw->map(function ($status_rw) {
                 return [
                     'id' => $status_rw->id,
                     'kelurahan' => $status_rw->kelurahans ? [
@@ -336,7 +326,7 @@ class PublikRequestController extends Controller
         }
     }
 
-    public function getAllDataUser(Request $request)
+    public function getAllDataUser()
     {
         try {
             if (!Gate::allows('view publikRequest')) {
@@ -344,16 +334,17 @@ class PublikRequestController extends Controller
             }
 
             $loggedInUser = $this->loggedInUser;
-            $q = User::query()
+            $users = User::query()
                 ->with(['roles', 'status_users'])
-                ->orderBy('created_at', 'desc');
+                ->orderBy('created_at', 'desc')
+                ->get();
 
             if ($loggedInUser->role_id == 1) {
                 // Super Admin: semua user kecuali id=1
-                $q->where('id', '!=', 1);
+                $users->where('id', '!=', 1);
             } elseif ($loggedInUser->role_id == 2) {
                 // PJ: hanya penggerak aktif dibawahnya
-                $q->whereIn('role_id', [3, 4])
+                $users->whereIn('role_id', [3, 4])
                     ->where('status_aktif', 2)
                     ->where('pj_pelaksana', $loggedInUser->id);
             } else {
@@ -362,13 +353,6 @@ class PublikRequestController extends Controller
                     'message' => 'Anda tidak memiliki hak akses untuk melakukan proses ini.',
                 ], Response::HTTP_FORBIDDEN);
             }
-
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts    = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [], 0);
-
-            $users = VersionedCacheHelper::remember('users', $parts, function () use ($q) {
-                return $q->get();
-            }, now()->addMinutes(30));
 
             if ($users->isEmpty()) {
                 return response()->json([
@@ -490,7 +474,7 @@ class PublikRequestController extends Controller
         }
     }
 
-    public function getAllUserbyPenggerak(Request $request)
+    public function getAllUserbyPenggerak()
     {
         try {
             $loggedInUser = $this->loggedInUser;
@@ -498,16 +482,17 @@ class PublikRequestController extends Controller
                 return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
             }
 
-            $q = User::query()
+            $users = User::query()
                 ->with(['roles', 'status_users'])
-                ->orderBy('created_at', 'desc');
+                ->orderBy('created_at', 'desc')
+                ->get();
 
             if ($loggedInUser->role_id == 1) {
                 // Super Admin: get all Penggerak
-                $q->where('role_id', 3);
+                $users->where('role_id', 3);
             } elseif ($loggedInUser->role_id == 2) {
                 // Penanggung Jawab: get Penggerak under them
-                $q->whereIn('role_id', [3, 4])
+                $users->whereIn('role_id', [3, 4])
                     ->where('status_aktif', 2) // Only active Penggerak
                     ->where('pj_pelaksana', $loggedInUser->id); // Only Penggerak under current Penanggung Jawab
             } else {
@@ -516,13 +501,6 @@ class PublikRequestController extends Controller
                     'message' => 'Anda tidak memiliki hak akses untuk melakukan proses ini.',
                 ], Response::HTTP_FORBIDDEN);
             }
-
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [], 0);
-
-            $users = VersionedCacheHelper::remember('users', $parts, function () use ($q) {
-                return $q->get();
-            }, now()->addMinutes(30));
 
             if ($users->isEmpty()) {
                 return response()->json([
@@ -644,29 +622,21 @@ class PublikRequestController extends Controller
         }
     }
 
-    public function getAllDataKelurahan(Request $request)
+    public function getAllDataKelurahan()
     {
         try {
             if (!Gate::allows('view publikRequest')) {
                 return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
             }
 
-            $loggedInUser = $this->loggedInUser;
-
-            $q = Kelurahan::query()
+            $kelurahan = Kelurahan::query()
                 ->with([
                     'provinsis',
                     'kabupaten_kotas',
                     'kecamatans',
                 ])
-                ->orderBy('created_at', 'desc');
-
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts    = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [], 0);
-
-            $kelurahan = VersionedCacheHelper::remember('kelurahan', $parts, function () use ($q) {
-                return $q->get();
-            }, now()->addMinutes(30));
+                ->orderBy('created_at', 'desc')
+                ->get();
 
             if ($kelurahan->isEmpty()) {
                 return response()->json([
@@ -704,7 +674,7 @@ class PublikRequestController extends Controller
         }
     }
 
-    public function getAllDataAktivitas(Request $request)
+    public function getAllDataAktivitas()
     {
         try {
             if (!Gate::allows('view publikRequest')) {
@@ -713,7 +683,7 @@ class PublikRequestController extends Controller
 
             $loggedInUser = $this->loggedInUser;
 
-            $q = AktivitasPelaksana::query()
+            $aktivitas = AktivitasPelaksana::query()
                 ->with([
                     'pelaksana_users.roles',
                     'status',
@@ -724,31 +694,25 @@ class PublikRequestController extends Controller
                     'aktivitas_rws.kelurahans.kabupaten_kotas',
                     'aktivitas_rws.kelurahans.kecamatans',
                 ])
-                ->orderBy('created_at', 'desc');
+                ->orderBy('created_at', 'desc')
+                ->get();
 
             if ($loggedInUser->role_id == 1) {
                 // all
             } elseif ($loggedInUser->role_id == 2) {
-                $q->where(function ($query) use ($loggedInUser) {
+                $aktivitas->where(function ($query) use ($loggedInUser) {
                     $query->whereHas('pelaksana_users', function ($subQuery) use ($loggedInUser) {
                         $subQuery->where('role_id', 3)->where('pj_pelaksana', $loggedInUser->id);
                     })->orWhere('pelaksana', $loggedInUser->id);
                 });
             } elseif ($loggedInUser->role_id == 3) {
-                $q->where('pelaksana', $loggedInUser->id);
+                $aktivitas->where('pelaksana', $loggedInUser->id);
             } else {
                 return response()->json([
                     'status'  => Response::HTTP_FORBIDDEN,
                     'message' => 'Anda tidak memiliki hak akses untuk melihat aktivitas ini.'
                 ], Response::HTTP_FORBIDDEN);
             }
-
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts    = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, /*filters*/ [], /*limit*/ 0);
-
-            $aktivitas = VersionedCacheHelper::remember('aktivitas', $parts, function () use ($q) {
-                return $q->get();
-            }, now()->addMinutes(30));
 
             if ($aktivitas->isEmpty()) {
                 return response()->json([
@@ -841,7 +805,7 @@ class PublikRequestController extends Controller
         }
     }
 
-    public function getAllDataAktivitasSaksi(Request $request)
+    public function getAllDataAktivitasSaksi()
     {
         try {
             if (!Gate::allows('view publikRequest')) {
@@ -850,7 +814,7 @@ class PublikRequestController extends Controller
 
             $loggedInUser = $this->loggedInUser;
 
-            $q = AktivitasSaksi::query()
+            $aktivitasSaksi = AktivitasSaksi::query()
                 ->with([
                     'saksi_users.roles',
                     'status',
@@ -861,33 +825,27 @@ class PublikRequestController extends Controller
                     'aktivitas_rws.kelurahans.kabupaten_kotas',
                     'aktivitas_rws.kelurahans.kecamatans',
                 ])
-                ->orderBy('created_at', 'desc');
+                ->orderBy('created_at', 'desc')
+                ->get();
 
             if ($loggedInUser->role_id == 1) {
                 // all
             } elseif ($loggedInUser->role_id == 2) {
-                $q->where(function ($query) use ($loggedInUser) {
+                $aktivitasSaksi->where(function ($query) use ($loggedInUser) {
                     $query->whereHas('saksi_users', function ($subQuery) use ($loggedInUser) {
                         $subQuery->where('role_id', 4)->where('pj_pelaksana', $loggedInUser->id);
                     })->orWhere('saksi', $loggedInUser->id);
                 });
             } elseif ($loggedInUser->role_id == 3) {
-                $q->where('saksi', $loggedInUser->id);
+                $aktivitasSaksi->where('saksi', $loggedInUser->id);
             } elseif ($loggedInUser->role_id == 4) {
-                $q->where('saksi', $loggedInUser->id);
+                $aktivitasSaksi->where('saksi', $loggedInUser->id);
             } else {
                 return response()->json([
                     'status'  => Response::HTTP_FORBIDDEN,
                     'message' => 'Anda tidak memiliki hak akses untuk melihat aktivitas ini.'
                 ], Response::HTTP_FORBIDDEN);
             }
-
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts    = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [], 0);
-
-            $aktivitasSaksi = VersionedCacheHelper::remember('saksi', $parts, function () use ($q) {
-                return $q->get();
-            }, now()->addMinutes(30));
 
             if ($aktivitasSaksi->isEmpty()) {
                 return response()->json([
@@ -980,16 +938,14 @@ class PublikRequestController extends Controller
         }
     }
 
-    public function getAllDataSuaraKPU(Request $request)
+    public function getAllDataSuaraKPU()
     {
         try {
             if (!Gate::allows('view publikRequest')) {
                 return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
             }
 
-            $loggedInUser = $this->loggedInUser;
-
-            $q = SuaraKPU::query()
+            $suara_kpu = SuaraKPU::query()
                 ->with([
                     'partais',
                     'kelurahans.provinsis',
@@ -997,14 +953,8 @@ class PublikRequestController extends Controller
                     'kelurahans.kecamatans',
                     'kategori_suaras',
                 ])
-                ->orderBy('created_at', 'desc');
-
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts    = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [], 0);
-
-            $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($q) {
-                return $q->get();
-            }, now()->addMinutes(30));
+                ->orderBy('created_at', 'desc')
+                ->get();
 
             if ($suara_kpu->isEmpty()) {
                 return response()->json([
@@ -1062,30 +1012,21 @@ class PublikRequestController extends Controller
         }
     }
 
-    public function getAllDataUpcomingTPS(Request $request)
+    public function getAllDataUpcomingTPS()
     {
         try {
             if (!Gate::allows('view upcomingTPS')) {
                 return response()->json(new WithoutDataResource(Response::HTTP_FORBIDDEN, 'Anda tidak memiliki hak akses untuk melakukan proses ini.'), Response::HTTP_FORBIDDEN);
             }
 
-            $loggedInUser = $this->loggedInUser;
-
-            $q = UpcomingTps::query()
+            $prakiraan_tps = UpcomingTps::query()
                 ->with([
                     'kelurahans.provinsis',
                     'kelurahans.kabupaten_kotas',
                     'kelurahans.kecamatans',
                 ])
-                ->orderByDesc('created_at');
-
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts    = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [], 0);
-
-            // Menyimpan data di cache dengan VersionedCacheHelper
-            $prakiraan_tps = VersionedCacheHelper::remember('upcoming_tps', $parts, function () use ($q) {
-                return $q->get();
-            }, now()->addMinutes(30));
+                ->orderByDesc('created_at')
+                ->get();
 
             // Cek apakah data kosong
             if ($prakiraan_tps->isEmpty()) {
@@ -1151,18 +1092,6 @@ class PublikRequestController extends Controller
                 ], Response::HTTP_BAD_REQUEST);
             }
 
-            $reqId = (string) Str::uuid();
-            Log::channel('public_request')->info('MAPS.START', [
-                'req_id'         => $reqId,
-                'user_id'        => $loggedInUser->id ?? null,
-                'role_id'        => $loggedInUser->role_id ?? null,
-                'kategori_suara' => $kategori_suara,
-                'tahun'          => $tahun,
-            ]);
-
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts    = VersionedCacheHelper::standardParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, [], 0);
-
             $kelurahan = collect();
             if ((int) ($loggedInUser->role_id ?? 0) === 1) {
                 $kelurahan = Kelurahan::all();
@@ -1177,17 +1106,11 @@ class PublikRequestController extends Controller
                 ], Response::HTTP_OK);
             }
 
-            // Log::channel('public_request')->info('MAPS.KELURAHAN.COUNT', [
-            //     'req_id'             => $reqId,
-            //     'kelurahan_count'    => $kelurahan->count(),
-            //     'kelurahan_id_sample' => $kelurahan->pluck('id')->take(2), // sample biar log tidak bengkak
-            // ]);
-
             $statusAktivitasRw = StatusAktivitasRw::whereIn('kelurahan_id', $kelurahan->pluck('id'))
                 ->with('aktivitas_status')
                 ->get();
 
-            $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $tahun, $kategori_suara, $reqId, $parts) {
+            $formattedData = $kelurahan->map(function ($kelurahan) use ($statusAktivitasRw, $tahun, $kategori_suara) {
                 $maxRw   = (int) $kelurahan->max_rw;
                 $list_rw = array_fill(0, max($maxRw, 0), null);
 
@@ -1196,39 +1119,16 @@ class PublikRequestController extends Controller
                         $list_rw[$status->rw - 1] = $status->status_aktivitas;
                     }
                 }
+
                 $status_aktivitas_kelurahan = StatusAktivitasHelper::DetermineStatusAktivitasKelurahan($list_rw);
+
+                // TODO: Nambah status untuk saksi
+                // $status_aktivitas_saksi = StatusAktivitasHelper::DetermineStatusAktivitasSaksi($list_rw);
 
                 $suara_kpu = SuaraKPU::where('kelurahan_id', $kelurahan->id)
                     ->whereIn('tahun', $tahun)
                     ->whereIn('kategori_suara_id', $kategori_suara)
                     ->get();
-
-                // Uji coba dengan cache
-                // $suara_kpu = VersionedCacheHelper::remember('suara_kpu', $parts, function () use ($kelurahan, $tahun, $kategori_suara) {
-                //     return SuaraKPU::where('kelurahan_id', $kelurahan->id)
-                //         ->whereIn('tahun', $tahun)
-                //         ->whereIn('kategori_suara_id', $kategori_suara)
-                //         ->get();
-                // }, now()->addMinutes(30));
-
-                if ($suara_kpu->isEmpty()) {
-                    Log::channel('public_request')->warning('MAPS.KEL.EMPTY', [
-                        'req_id'        => $reqId,
-                        'kelurahan_id'  => $kelurahan->id,
-                        'kelurahan_kode' => $kelurahan->kode_kelurahan ?? null,
-                        'tahun'         => $tahun,
-                        'kategori_suara' => $kategori_suara,
-                    ]);
-                } else {
-                    Log::channel('public_request')->info('MAPS.KEL.AGG', [
-                        'req_id'        => $reqId,
-                        'kelurahan_id'  => $kelurahan->id,
-                        'rows_count'    => $suara_kpu->count(),
-                        'top_preview'   => $suara_kpu->take(2), // max 5 biar hemat log
-                        'top_partai_id' => optional($suara_kpu->first())->partai_id,
-                        'top_total'     => (int) optional($suara_kpu->first())->total_suara,
-                    ]);
-                }
 
                 $suaraKpuByPartai = $suara_kpu->where('kelurahan_id', $kelurahan->id)->groupBy('partai_id')->map(function ($items) {
                     return [
@@ -1270,6 +1170,7 @@ class PublikRequestController extends Controller
                     'provinsi' => $kelurahan->provinsis,
                     // 'list_rw' => $list_rw, // buat debug
                     'status_aktivitas_kelurahan' => $status_aktivitas_kelurahan,
+                    // 'status_aktivitas_saksi' => $status_aktivitas_saksi,
                     'suara_kpu_terbanyak' => $suara_kpu_terbanyak,
                     'created_at' => $kelurahan->created_at,
                     'updated_at' => $kelurahan->updated_at

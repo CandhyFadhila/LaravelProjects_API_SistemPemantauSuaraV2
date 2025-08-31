@@ -53,6 +53,43 @@ class StatusAktivitasHelper
 		];
 	}
 
+	public static function DetermineStatusAktivitasSaksi($list_rw)
+	{
+		$hasNull = in_array(null, $list_rw, true);
+		$hasSaksi = in_array(3, $list_rw);
+
+		// Jika ada null dalam array
+		if ($hasNull) {
+			return [
+				"id" => null,
+				"label" => null,
+				"color" => "F0F0F0",
+				"created_at" => null,
+				"updated_at" => null
+			];
+		}
+
+		// Jika ada "Saksi"
+		if ($hasSaksi) {
+			return [
+				"id" => 3,
+				"label" => "Saksi",
+				"color" => "FCC61D",
+				"created_at" => "2024-10-13T04:32:22.000000Z",
+				"updated_at" => "2024-10-13T04:32:22.000000Z"
+			];
+		}
+
+		// Default, return null status
+		return [
+			"id" => null,
+			"label" => null,
+			"color" => "FFFFFF",
+			"created_at" => null,
+			"updated_at" => null
+		];
+	}
+
 	public static function TransformRwList($rwList)
 	{
 		return array_map(function ($rwStatus) {

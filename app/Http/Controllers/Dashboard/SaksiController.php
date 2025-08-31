@@ -54,6 +54,7 @@ class SaksiController extends Controller
             $page  = (int) $request->input('page', 1);
             $limit = $limit <= 0 ? 10 : $limit;
             $page  = $page <= 0 ? 1 : $page;
+
             $loggedInUser = $this->loggedInUser;
 
             $q = AktivitasSaksi::query()
@@ -87,26 +88,16 @@ class SaksiController extends Controller
             $filters = Arr::sortRecursive($request->except(['limit', 'page']));
             $q = SaksiFilterHelper::applyFiltersAktivitasSaksi($q, $filters);
 
-            $routeKey = optional($request->route())->getName() ?? $request->path();
-            $parts    = VersionedCacheHelper::standardPagedParts($routeKey, $loggedInUser->id, $loggedInUser->role_id, $filters, $page, $limit);
+            $p = $q->paginate($limit, ['*'], 'page', $page);
 
-            $payload = VersionedCacheHelper::remember('saksi', $parts, function () use ($q, $limit, $page) {
-                $p = $q->paginate($limit, ['*'], 'page', $page);
-                return [
-                    'items' => $p->items(),
-                    'meta'  => [
-                        'current_page' => $p->currentPage(),
-                        'last_page'    => $p->lastPage(),
-                        'per_page'     => $p->perPage(),
-                        'total'        => $p->total(),
-                    ],
-                ];
-            }, now()->addMinutes(30));
+            $meta  = [
+                'current_page' => $p->currentPage(),
+                'last_page'    => $p->lastPage(),
+                'per_page'     => $p->perPage(),
+                'total'        => $p->total(),
+            ];
 
-            $items = collect($payload['items']);
-            $meta  = $payload['meta'];
-
-            if ($items->isEmpty()) {
+            if ($p->total() === 0) {
                 return response()->json([
                     'status'     => Response::HTTP_NOT_FOUND,
                     'message'    => 'Data aktivitas saksi tidak ditemukan.',
@@ -122,6 +113,8 @@ class SaksiController extends Controller
                     ],
                 ], Response::HTTP_OK);
             }
+
+            $items = collect($p->items());
 
             $formattedData = $items->map(function ($aktivitasSaksi) {
                 $role = $aktivitasSaksi->saksi_users->roles->first();
@@ -663,7 +656,6 @@ class SaksiController extends Controller
 
             try {
                 Excel::import(new AktivitasSaksiImport, $file['aktivitas_saksi_file']);
-                VersionedCacheHelper::bump(AktivitasSaksi::CACHE_NAMESPACE, 1);
             } catch (\Exception $e) {
                 return response()->json(new WithoutDataResource(Response::HTTP_NOT_ACCEPTABLE, 'Maaf sepertinya terjadi kesalahan.' . $e->getMessage()), Response::HTTP_NOT_ACCEPTABLE);
             }

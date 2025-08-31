@@ -90,8 +90,6 @@ class SuaraKPUController extends Controller
                 $importer = new SuaraKPUImport($tahun, $kategori, $sheetNames, $report);
 
                 Excel::import($importer, $uploaded);
-
-                VersionedCacheHelper::bump('suara_kpu', 1);
             } catch (\Exception $e) {
                 return response()->json(new WithoutDataResource(Response::HTTP_NOT_ACCEPTABLE, 'Maaf sepertinya terjadi kesalahan. ' . $e->getMessage()), Response::HTTP_NOT_ACCEPTABLE);
             }
